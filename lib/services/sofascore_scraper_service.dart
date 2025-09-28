@@ -137,6 +137,38 @@ class SofaScoreScraperService {
               }
             }
             
+            // Converti startTime in DateTime
+            DateTime startDateTime;
+            try {
+              // Se è "In corso" o un altro formato non valido, usa l'ora corrente
+              if (startTime == 'In corso' || startTime.isEmpty) {
+                startDateTime = DateTime.now();
+              } else {
+                // Prova a convertire l'orario in un formato DateTime
+                final today = DateTime.now();
+                final parts = startTime.split(':');
+                if (parts.length == 2) {
+                  final hour = int.tryParse(parts[0]) ?? 0;
+                  final minute = int.tryParse(parts[1]) ?? 0;
+                  startDateTime = DateTime(today.year, today.month, today.day, hour, minute);
+                } else {
+                  startDateTime = DateTime.now();
+                }
+              }
+            } catch (e) {
+              startDateTime = DateTime.now();
+            }
+            
+            // Converti elapsedTime in int?
+            int? elapsedInt;
+            if (elapsedTime != null) {
+              if (elapsedTime.toLowerCase() == 'live') {
+                elapsedInt = 1; // Valore arbitrario per indicare che è live
+              } else {
+                elapsedInt = int.tryParse(elapsedTime);
+              }
+            }
+            
             // Crea l'oggetto Fixture
             fixtures.add(Fixture(
               id: id++,
@@ -144,8 +176,8 @@ class SofaScoreScraperService {
               away: awayTeam,
               goalsHome: homeGoals,
               goalsAway: awayGoals,
-              start: startTime,
-              elapsed: elapsedTime,
+              start: startDateTime,
+              elapsed: elapsedInt,
             ));
           } catch (e) {
             print('Errore nel parsing di una partita: $e');
@@ -167,6 +199,9 @@ class SofaScoreScraperService {
   
   // Metodo per generare dati di esempio (fallback se tutto fallisce)
   List<Fixture> getSampleFixtures() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    
     return [
       Fixture(
         id: 1,
@@ -174,8 +209,8 @@ class SofaScoreScraperService {
         away: 'Inter',
         goalsHome: 2,
         goalsAway: 1,
-        start: '20:45',
-        elapsed: '75',
+        start: DateTime(today.year, today.month, today.day, 20, 45),
+        elapsed: 75,
       ),
       Fixture(
         id: 2,
@@ -183,8 +218,8 @@ class SofaScoreScraperService {
         away: 'Roma',
         goalsHome: 0,
         goalsAway: 0,
-        start: '18:30',
-        elapsed: '32',
+        start: DateTime(today.year, today.month, today.day, 18, 30),
+        elapsed: 32,
       ),
       Fixture(
         id: 3,
@@ -192,7 +227,7 @@ class SofaScoreScraperService {
         away: 'Lazio',
         goalsHome: 3,
         goalsAway: 0,
-        start: '15:00',
+        start: DateTime(today.year, today.month, today.day, 15, 0),
         elapsed: null,
       ),
       Fixture(
@@ -201,7 +236,7 @@ class SofaScoreScraperService {
         away: 'Fiorentina',
         goalsHome: 1,
         goalsAway: 1,
-        start: '20:45',
+        start: DateTime(today.year, today.month, today.day, 20, 45),
         elapsed: null,
       ),
       Fixture(
@@ -210,8 +245,8 @@ class SofaScoreScraperService {
         away: 'Torino',
         goalsHome: 0,
         goalsAway: 0,
-        start: '15:00',
-        elapsed: '12',
+        start: DateTime(today.year, today.month, today.day, 15, 0),
+        elapsed: 12,
       ),
     ];
   }
