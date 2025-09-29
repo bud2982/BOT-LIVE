@@ -223,8 +223,15 @@ class SofaScoreScraperService {
     
     // Lista di possibili selettori per i container delle partite
     final selectors = [
-      '.sc-fqkvVR',
+      // Selettori generici
       '.event',
+      '.match',
+      '.game',
+      '.fixture',
+      '.contest',
+      
+      // Selettori specifici SofaScore
+      '.sc-fqkvVR',
       '.event__match',
       '.sportName-soccer',
       '.event__container',
@@ -232,14 +239,32 @@ class SofaScoreScraperService {
       '.match-card',
       '.match-row',
       '.event-card',
-      // Selettori aggiuntivi per SofaScore 2024
+      
+      // Selettori con attributi data-testid
       'div[data-testid="event-card"]',
       'div[data-testid="match-card"]',
       'div[data-testid="event-list-item"]',
+      'div[data-testid="match"]',
+      'div[data-testid="fixture"]',
+      'div[data-testid="game"]',
+      
+      // Selettori per classi SC (styled-components)
       '.sc-hLBbgP',
       '.sc-eDvSVe',
       '.sc-jSUZER',
+      '.sc-gswNZR',
+      '.sc-dkrFOg',
+      '.sc-hBxehG',
+      '.sc-bqWxrE',
+      '.sc-ksBlkl',
+      '.sc-hBxehG',
+      '.sc-fnGiBr',
+      
+      // Altri selettori specifici
       '.eventItem',
+      '.matchItem',
+      '.gameItem',
+      '.fixtureItem',
       '.matchItem',
       'div[class*="match"]',
       'div[class*="event"]',
