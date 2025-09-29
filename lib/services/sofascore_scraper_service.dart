@@ -30,14 +30,16 @@ class SofaScoreScraperService {
   
   // Metodo principale per ottenere le partite di oggi
   Future<List<Fixture>> getFixturesToday() async {
-    // Controlla la cache (aggiorna solo ogni 5 minuti per le partite del giorno)
+    // Forziamo l'aggiornamento dei dati per ottenere partite reali
     final now = DateTime.now();
-    if (_lastFetchTime != null && 
-        now.difference(_lastFetchTime!).inMinutes < 5 &&
-        _cache.containsKey('today')) {
-      print('Usando dati in cache per le partite di oggi');
-      return _cache['today'];
-    }
+    
+    // Disabilitiamo temporaneamente la cache per forzare il recupero di dati freschi
+    // if (_lastFetchTime != null && 
+    //     now.difference(_lastFetchTime!).inMinutes < 5 &&
+    //     _cache.containsKey('today')) {
+    //   print('Usando dati in cache per le partite di oggi');
+    //   return _cache['today'];
+    // }
     
     try {
       print('Recuperando partite di oggi da SofaScore...');
@@ -79,14 +81,16 @@ class SofaScoreScraperService {
   
   // Metodo per ottenere solo le partite live
   Future<List<Fixture>> getLiveMatches() async {
-    // Per le partite live, aggiorniamo più frequentemente (ogni minuto)
+    // Forziamo l'aggiornamento dei dati per ottenere partite reali
     final now = DateTime.now();
-    if (_lastFetchTime != null && 
-        now.difference(_lastFetchTime!).inMinutes < 1 &&
-        _cache.containsKey('live')) {
-      print('Usando dati in cache per le partite live');
-      return _cache['live'];
-    }
+    
+    // Disabilitiamo temporaneamente la cache per forzare il recupero di dati freschi
+    // if (_lastFetchTime != null && 
+    //     now.difference(_lastFetchTime!).inMinutes < 1 &&
+    //     _cache.containsKey('live')) {
+    //   print('Usando dati in cache per le partite live');
+    //   return _cache['live'];
+    // }
     
     try {
       print('Recuperando partite live...');
@@ -142,6 +146,18 @@ class SofaScoreScraperService {
       'https://www.sofascore.com/football/$today',
       'https://www.sofascore.com/it/tournament/football/italy/serie-a/$today',
       'https://www.sofascore.com/tournament/football/italy/serie-a/$today',
+      'https://www.sofascore.com/it/tournament/football/england/premier-league/$today',
+      'https://www.sofascore.com/tournament/football/england/premier-league/$today',
+      'https://www.sofascore.com/it/tournament/football/spain/laliga/$today',
+      'https://www.sofascore.com/tournament/football/spain/laliga/$today',
+      'https://www.sofascore.com/it/tournament/football/germany/bundesliga/$today',
+      'https://www.sofascore.com/tournament/football/germany/bundesliga/$today',
+      'https://www.sofascore.com/it/tournament/football/france/ligue-1/$today',
+      'https://www.sofascore.com/tournament/football/france/ligue-1/$today',
+      'https://www.sofascore.com/it/tournament/football/champions-league/$today',
+      'https://www.sofascore.com/tournament/football/champions-league/$today',
+      'https://www.sofascore.com/it/tournament/football/europa-league/$today',
+      'https://www.sofascore.com/tournament/football/europa-league/$today',
     ];
     
     // Prova ogni URL fino a quando uno funziona
