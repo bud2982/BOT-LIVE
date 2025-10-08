@@ -56,18 +56,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       // Carica le preferenze
       _updateStatus('Caricamento preferenze...');
       final prefs = await SharedPreferences.getInstance();
-      var apiKey = prefs.getString('api_key');
-      print('API Key dalle preferenze: ${apiKey != null ? "${apiKey.substring(0, min(5, apiKey.length))}..." : "null"}');
       
-      // Se la chiave API non è impostata, imposta quella predefinita
-      if (apiKey == null || apiKey.isEmpty) {
-        apiKey = '239a1e02def2d210a0829a958348c5f5';
-        print('Impostazione API Key predefinita: ${apiKey.substring(0, 5)}...');
-        await prefs.setString('api_key', apiKey);
-        print('API Key predefinita salvata nelle preferenze');
-      }
-      
-      // Imposta anche l'intervallo predefinito se non è già impostato
+      // Imposta l'intervallo predefinito se non è già impostato
       final intervalMin = prefs.getInt('interval_min');
       if (intervalMin == null) {
         print('Impostazione intervallo predefinito: 1 minuto');
@@ -77,8 +67,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         print('Intervallo dalle preferenze: $intervalMin minuti');
       }
       
-      // Forza l'uso di dati reali
-      print('Forzatura uso dati reali');
+      // Forza l'uso di dati reali (scraping)
+      print('Configurazione per uso dati reali tramite scraping');
       await prefs.setBool('use_sample_data', false);
       print('Flag per dati di esempio impostato a false');
       
@@ -135,7 +125,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     print('ERRORE: $message');
   }
   
-  int min(int a, int b) => a < b ? a : b;
+
 
   @override
   Widget build(BuildContext context) {

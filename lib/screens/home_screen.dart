@@ -1,80 +1,48 @@
-import 'dart:math' show min;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/fixture.dart';
-import '../services/api_football_service.dart';
+import '../services/hybrid_football_service.dart';
 import '../services/local_notif_service.dart';
 import '../controllers/monitor_controller.dart';
-
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
-
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
-
 class _HomeScreenState extends State<HomeScreen> {
   late Future<List<Fixture>> _future;
   final Set<int> _selected = {};
   MonitorController? _controller;
-  String? _apiKey;
   int _intervalMin = 1;
-  bool _useSampleData = false;
   bool _isMonitoring = false;
   bool _isLoading = true;
-  String? _errorMessage;
-
   @override
   void initState() {
     super.initState();
     _init();
   }
-
   Future<void> _init() async {
     print('HomeScreen._init() chiamato');
     setState(() {
       _isLoading = true;
-      _errorMessage = null;
     });
-    
     try {
       final prefs = await SharedPreferences.getInstance();
-      _apiKey = prefs.getString('api_key');
       _intervalMin = prefs.getInt('interval_min') ?? 1;
-      _useSampleData = prefs.getBool('use_sample_data') ?? false;
-      
-      print('Preferenze caricate: API Key=${_apiKey != null ? "${_apiKey!.substring(0, min(5, _apiKey!.length))}..." : "null"}, Intervallo=$_intervalMin min, UseSampleData=$_useSampleData');
-      
-      // Se la chiave API non è impostata, usa quella predefinita
-      if (_apiKey == null || _apiKey!.isEmpty) {
-        _apiKey = '239a1e02def2d210a0829a958348c5f5'; // Nuova chiave API autorizzata
-        await prefs.setString('api_key', _apiKey!);
-        print('Impostata API Key predefinita: ${_apiKey!.substring(0, 5)}...');
-      }
-      
+      print('Preferenze caricate: Intervallo=$_intervalMin min');
       await _loadFixtures();
     } catch (e) {
       print('Errore critico durante l\'inizializzazione: $e');
       print('Stack trace: ${e.toString()}');
-      
       setState(() {
-        _errorMessage = 'Errore di inizializzazione: $e';
         _isLoading = false;
       });
-      
-      // In caso di errore critico, usa comunque i dati di esempio
-      if (_apiKey == null) {
-        _apiKey = '239a1e02def2d210a0829a958348c5f5'; // Chiave predefinita
-        print('Impostata API Key predefinita dopo errore critico');
-      }
-      
-      _useSampleData = true;
+      // In caso di errore critico, prova comunque a caricare i dati
       await _loadFixtures();
-      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Errore critico: $e - Verranno usati dati di esempio'),
+            content: Text('Errore critico: $e - Tentativo di recupero dati'),
             duration: const Duration(seconds: 5),
           ),
         );
@@ -84,79 +52,53 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoading = false;
       });
     }
-    
     print('HomeScreen._init() completato');
   }
-  
   Future<void> _loadFixtures() async {
     try {
-      if (_useSampleData) {
-        print('Utilizzo dati di esempio come richiesto nelle impostazioni');
-        final apiService = ApiFootballService(_apiKey!, useSampleData: true);
-        _future = apiService.getFixturesToday();
-        
+      print('Caricamento partite con Hybrid Football Service...');
+      final hybridService = HybridFootballService();
+      // Test di connessione
+      final isConnected = await hybridService.testConnection();
+      if (!isConnected) {
+        print('Test di connessione fallito, ma continuo comunque (il servizio ha fallback)');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Utilizzo dati di esempio come richiesto nelle impostazioni'),
+              content: Text('Connessione limitata - Utilizzo dati di fallback'),
               duration: Duration(seconds: 3),
             ),
           );
         }
       } else {
-        // Tenta di usare dati reali dall'API, ma con fallback ai dati di esempio
-        print('Tentativo di utilizzare l\'API reale...');
-        final apiService = ApiFootballService(_apiKey!, useSampleData: false);
-        
-        // Test di connessione
-        final isConnected = await apiService.testConnection();
-        if (!isConnected) {
-          print('Test di connessione fallito, passaggio ai dati di esempio');
-          final fallbackService = ApiFootballService(_apiKey!, useSampleData: true);
-          _future = fallbackService.getFixturesToday();
-          
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Connessione API non disponibile - Utilizzo dati di esempio'),
-                duration: Duration(seconds: 3),
-              ),
-            );
-          }
-        } else {
-          print('Test di connessione riuscito, utilizzo API reale');
-          _future = apiService.getFixturesToday();
-          
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Connessione API riuscita - Utilizzo dati reali'),
-                duration: Duration(seconds: 3),
-              ),
-            );
-          }
+        print('Test di connessione riuscito');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Connessione riuscita - Recupero dati da SofaScore'),
+              duration: Duration(seconds: 3),
+            ),
+          );
         }
       }
+      _future = hybridService.getFixturesToday();
     } catch (e) {
       print('Errore durante il caricamento delle partite: $e');
       print('Stack trace: ${e.toString()}');
-      
-      // Usa dati di esempio in caso di errore
-      print('Passaggio ai dati di esempio dopo errore...');
-      final apiService = ApiFootballService(_apiKey!, useSampleData: true);
-      _future = apiService.getFixturesToday();
-      
+      // Usa il servizio comunque, ha i suoi fallback interni
+      print('Tentativo con servizio di fallback...');
+      final hybridService = HybridFootballService();
+      _future = hybridService.getFixturesToday();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Errore di caricamento: $e - Verranno usati dati di esempio'),
+            content: Text('Errore di caricamento: $e - Utilizzo dati di fallback'),
             duration: const Duration(seconds: 5),
           ),
         );
       }
     }
   }
-
   void _toggleAll(List<Fixture> fixtures) {
     setState(() {
       if (_selected.length == fixtures.length) {
@@ -168,54 +110,36 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     });
   }
-
   Future<void> _startMonitoring() async {
     print('_startMonitoring chiamato');
-    
     if (_isMonitoring) {
       _stopMonitoring();
       return;
     }
-    
-    if (_apiKey == null || _apiKey!.isEmpty) {
-      print('API key non impostata');
-      _showError('API key non impostata. Vai nelle impostazioni per configurarla.');
-      return;
-    }
-    
     if (_selected.isEmpty) {
       print('Nessuna partita selezionata');
       _showError('Seleziona almeno una partita da monitorare');
       return;
     }
-    
     print('Partite selezionate: $_selected');
     setState(() => _isLoading = true);
-    
     try {
-      // Usa dati di esempio se richiesto nelle impostazioni o se ci sono stati errori
-      final useSample = _useSampleData || _errorMessage != null;
-      final api = ApiFootballService(_apiKey!, useSampleData: useSample);
+      final hybridService = HybridFootballService();
       final notif = LocalNotifService();
-      
       print('Inizializzazione servizio notifiche...');
       await notif.init();
       print('Servizio notifiche inizializzato');
-      
       _controller?.stop();
       _controller = MonitorController(
-        api: api, 
+        api: hybridService, 
         notif: notif, 
         selected: _selected,
         intervalMinutes: _intervalMin,
       );
-      
       print('Avvio monitoraggio...');
       await _controller!.start();
       print('Monitoraggio avviato');
-      
       setState(() => _isMonitoring = true);
-      
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -223,63 +147,42 @@ class _HomeScreenState extends State<HomeScreen> {
           duration: const Duration(seconds: 3),
         ),
       );
-      
-      // Mostra un messaggio informativo sull'utilizzo dei dati
-      if (useSample) {
-        Future.delayed(const Duration(seconds: 4), () {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Monitoraggio attivo con dati di esempio'),
-                duration: Duration(seconds: 5),
-              ),
-            );
-          }
-        });
-      }
     } catch (e) {
       print('Errore durante l\'avvio del monitoraggio: $e');
       _showError('Errore: $e');
-      
-      // In caso di errore, prova con i dati di esempio
+      // In caso di errore, prova comunque (il servizio ha fallback interni)
       try {
-        final api = ApiFootballService(_apiKey!, useSampleData: true);
+        final hybridService = HybridFootballService();
         final notif = LocalNotifService();
-        
         await notif.init();
-        
         _controller?.stop();
         _controller = MonitorController(
-          api: api, 
+          api: hybridService, 
           notif: notif, 
           selected: _selected,
           intervalMinutes: _intervalMin,
         );
-        
         await _controller!.start();
         setState(() => _isMonitoring = true);
-        
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Monitoraggio avviato con dati di esempio (intervallo: $_intervalMin min)'),
+            content: Text('Monitoraggio avviato con fallback (intervallo: $_intervalMin min)'),
             duration: const Duration(seconds: 3),
           ),
         );
       } catch (e2) {
-        print('Errore anche con dati di esempio: $e2');
+        print('Errore anche con servizio di fallback: $e2');
         _showError('Errore critico: $e2');
       }
     } finally {
       setState(() => _isLoading = false);
     }
   }
-  
   void _stopMonitoring() {
     if (_controller != null) {
       _controller!.stop();
       setState(() => _isMonitoring = false);
-      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -290,7 +193,6 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
   }
-  
   void _showError(String message) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -302,14 +204,11 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
   }
-  
   Future<void> _refreshData() async {
     print('Aggiornamento dati...');
     setState(() {
       _isLoading = true;
-      _errorMessage = null;
     });
-    
     try {
       await _loadFixtures();
       if (mounted) {
@@ -323,7 +222,6 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       print('Errore durante l\'aggiornamento: $e');
       setState(() {
-        _errorMessage = 'Errore di aggiornamento: $e';
       });
       _showError('Errore durante l\'aggiornamento: $e');
     } finally {
@@ -332,13 +230,11 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     }
   }
-
   @override
   void dispose() {
     _controller?.stop();
     super.dispose();
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -363,40 +259,12 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _errorMessage != null && (_apiKey == null || _future == null)
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.error_outline, color: Colors.red, size: 48),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Errore',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      const SizedBox(height: 8),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                        child: Text(
-                          _errorMessage!,
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      ElevatedButton(
-                        onPressed: _refreshData,
-                        child: const Text('Riprova'),
-                      ),
-                    ],
-                  ),
-                )
               : FutureBuilder<List<Fixture>>(
                   future: _future,
                   builder: (context, snap) {
                     if (snap.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
                     }
-                    
                     if (snap.hasError) {
                       return Center(
                         child: Column(
@@ -425,9 +293,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       );
                     }
-                    
                     final fixtures = snap.data ?? [];
-                    
                     if (fixtures.isEmpty) {
                       return Center(
                         child: Column(
@@ -453,12 +319,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       );
                     }
-                    
                     return Column(
                       children: [
                         Container(
                           padding: const EdgeInsets.all(8.0),
-                          color: Theme.of(context).colorScheme.surfaceVariant,
+                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
                           child: Row(
                             children: [
                               ElevatedButton(
@@ -516,14 +381,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                     });
                                   },
                                   title: Text(
-                                    f.home + ' - ' + f.away,
+                                    '${f.home} - ${f.away}',
                                     style: const TextStyle(fontWeight: FontWeight.bold),
                                   ),
                                   subtitle: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text('Inizio: ' + f.start.toString().substring(0, 16)),
-                                      Text('ID: ' + f.id.toString(), style: const TextStyle(fontSize: 12)),
+                                      Text('Inizio: ${f.start.toString().substring(0, 16)}'),
+                                      Text('ID: ${f.id}', style: const TextStyle(fontSize: 12)),
                                     ],
                                   ),
                                   secondary: const Icon(Icons.sports_soccer),
@@ -536,11 +401,27 @@ class _HomeScreenState extends State<HomeScreen> {
                     );
                   },
                 ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _startMonitoring,
-        backgroundColor: _isMonitoring ? Colors.red : Colors.green,
-        child: Icon(_isMonitoring ? Icons.stop : Icons.play_arrow),
-        tooltip: _isMonitoring ? 'Ferma monitoraggio' : 'Avvia monitoraggio',
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton.small(
+            heroTag: 'live_matches',
+            onPressed: () {
+              Navigator.pushNamed(context, '/live_matches');
+            },
+            backgroundColor: Colors.blue,
+            tooltip: 'Partite Live',
+            child: const Icon(Icons.sports_soccer),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton(
+            heroTag: 'monitor',
+            onPressed: _startMonitoring,
+            backgroundColor: _isMonitoring ? Colors.red : Colors.green,
+            tooltip: _isMonitoring ? 'Ferma monitoraggio' : 'Avvia monitoraggio',
+            child: Icon(_isMonitoring ? Icons.stop : Icons.play_arrow),
+          ),
+        ],
       ),
     );
   }

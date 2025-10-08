@@ -5,20 +5,24 @@ import 'dart:async';  // Aggiunto per TimeoutException
 import 'package:http/http.dart' as http;
 import '../models/fixture.dart';
 import '../models/fixture_samples.dart';
+import '../models/fixture_live_simulator.dart';
 
 class ApiFootballService {
   final String apiKey;
   final bool useSampleData;
+  final bool useRealisticSimulation;
   final Duration timeout;
   
   ApiFootballService(
     this.apiKey, {
     this.useSampleData = false,
+    this.useRealisticSimulation = false,
     this.timeout = const Duration(seconds: 15),
   });
 
   Map<String, String> get _headers => {
-        'x-apisports-key': apiKey,
+        'X-RapidAPI-Key': apiKey,
+        'X-RapidAPI-Host': 'api-football-v1.p.rapidapi.com',
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       };
@@ -42,14 +46,14 @@ class ApiFootballService {
       print('Tentativo di chiamata API reale con chiave: ${apiKey.substring(0, min(10, apiKey.length))}...');
       final today = DateTime.now().toIso8601String().substring(0, 10);
       final url = Uri.parse(
-          'https://v3.football.api-sports.io/fixtures?date=$today');
+          'https://api-football-v1.p.rapidapi.com/v3/fixtures?date=$today');
       
       print('URL richiesta: $url');
       print('Headers: $_headers');
       
       // Verifica connessione internet prima di fare la richiesta
       try {
-        final result = await InternetAddress.lookup('api-sports.io');
+        final result = await InternetAddress.lookup('rapidapi.com');
         if (result.isEmpty || result[0].rawAddress.isEmpty) {
           print('Nessuna connessione internet disponibile');
           return FixtureSamples.getSampleFixtures();
@@ -154,9 +158,16 @@ class ApiFootballService {
     }
     
     // Verifica se la chiave API è valida
-    if (!_isApiKeyValid && !useSampleData) {
+    if (!_isApiKeyValid && !useSampleData && !useRealisticSimulation) {
       print('ATTENZIONE: Chiave API non valida o mancante. Utilizzo dati di esempio per monitoraggio.');
       return FixtureSamples.getSampleLiveFixtures(ids);
+    }
+    
+    // Se useRealisticSimulation è true, usa il simulatore realistico
+    if (useRealisticSimulation) {
+      print('Utilizzo simulatore realistico per getLiveByIds()');
+      final baseFixtures = await getFixturesToday();
+      return FixtureLiveSimulator.getRealisticLiveFixtures(ids, baseFixtures);
     }
     
     // Se useSampleData è true, restituisci dati di esempio
@@ -169,14 +180,14 @@ class ApiFootballService {
       print('Tentativo di chiamata API reale per monitoraggio con chiave: ${apiKey.substring(0, min(10, apiKey.length))}...');
       final idsString = ids.join('-');
       final url = Uri.parse(
-          'https://v3.football.api-sports.io/fixtures?ids=$idsString');
+          'https://api-football-v1.p.rapidapi.com/v3/fixtures?ids=$idsString');
       
       print('URL monitoraggio: $url');
       print('Headers: $_headers');
       
       // Verifica connessione internet prima di fare la richiesta
       try {
-        final result = await InternetAddress.lookup('api-sports.io');
+        final result = await InternetAddress.lookup('rapidapi.com');
         if (result.isEmpty || result[0].rawAddress.isEmpty) {
           print('Nessuna connessione internet disponibile per monitoraggio');
           return FixtureSamples.getSampleLiveFixtures(ids);
@@ -276,11 +287,11 @@ class ApiFootballService {
     
     try {
       print('Test connessione API...');
-      final url = Uri.parse('https://v3.football.api-sports.io/status');
+      final url = Uri.parse('https://api-football-v1.p.rapidapi.com/v3/status');
       
       // Verifica connessione internet prima di fare la richiesta
       try {
-        final result = await InternetAddress.lookup('api-sports.io');
+        final result = await InternetAddress.lookup('rapidapi.com');
         if (result.isEmpty || result[0].rawAddress.isEmpty) {
           print('Nessuna connessione internet disponibile');
           return false;

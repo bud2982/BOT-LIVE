@@ -5,6 +5,10 @@ import 'package:flutter/services.dart';
 import 'screens/splash_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/live_matches_screen.dart';
+import 'pages/country_matches_page.dart';
+import 'pages/telegram_config_page.dart';
+import 'pages/followed_matches_page.dart';
 
 // Variabile globale per il logger
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -86,6 +90,10 @@ class LiveBotApp extends StatelessWidget {
         '/': (_) => const SplashScreen(),
         '/home': (_) => const HomeScreen(),
         '/settings': (_) => const SettingsScreen(),
+        '/live_matches': (_) => const LiveMatchesScreen(),
+        '/country_matches': (_) => const CountryMatchesPage(),
+        '/telegram_config': (_) => const TelegramConfigPage(),
+        '/followed_matches': (_) => const FollowedMatchesPage(),
       },
       // Gestione degli errori nell'app
       builder: (context, child) {

@@ -107,7 +107,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Informazioni su SofaScore
+                    // Informazioni su LiveScore
                     const Text(
                       'Fonte dati',
                       style: TextStyle(
@@ -127,7 +127,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Dati forniti da SofaScore',
+                            'Dati forniti da LiveScore',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
@@ -135,7 +135,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                           SizedBox(height: 4),
                           Text(
-                            'L\'app utilizza SofaScore come unica fonte di dati per le partite di calcio in tempo reale.',
+                            'L\'app utilizza LiveScore come unica fonte di dati per le partite di calcio in tempo reale.',
                             style: TextStyle(fontSize: 13),
                           ),
                         ],
@@ -175,6 +175,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const Text(
                       'Intervallo tra i controlli delle partite in corso. Un intervallo più breve fornisce aggiornamenti più frequenti ma consuma più batteria e dati.',
                       style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    
+                    const SizedBox(height: 24),
+                    
+                    // Notifiche Telegram
+                    const Text(
+                      'Notifiche Telegram',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blue.shade200),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Ricevi notifiche su Telegram',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Configura il tuo Chat ID Telegram per ricevere notifiche in tempo reale sulle partite.',
+                            style: TextStyle(fontSize: 13),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                Navigator.pushNamed(context, '/telegram_config');
+                              },
+                              icon: const Icon(Icons.telegram),
+                              label: const Text('Configura Telegram'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue,
+                                foregroundColor: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     
                     const SizedBox(height: 24),
@@ -224,7 +276,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           Text(
                             _useSampleData
                                 ? 'L\'app utilizza dati di esempio per mostrare le partite.'
-                                : 'L\'app tenta di recuperare partite reali da SofaScore.',
+                                : 'L\'app tenta di recuperare partite reali da LiveScore.',
                             style: const TextStyle(fontSize: 13),
                           ),
                         ],
