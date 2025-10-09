@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:live_bot/services/api_football_service.dart';
+import 'package:live_bot/services/hybrid_football_service.dart';
 import 'package:live_bot/services/local_notif_service.dart';
 import 'package:live_bot/controllers/monitor_controller.dart';
 
@@ -8,11 +8,7 @@ void main() async {
   
   // Inizializza i servizi con simulazione realistica
   print('Inizializzazione servizi...');
-  final apiService = ApiFootballService(
-    '579a87ccc9msha9746fe3358bb2bp1e42a9jsnf000b28c9f8f', 
-    useSampleData: false,
-    useRealisticSimulation: true, // Usa la simulazione realistica
-  );
+  final apiService = HybridFootballService();
   final notifService = LocalNotifService();
   
   // Inizializza il servizio di notifica
