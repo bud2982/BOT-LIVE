@@ -1,19 +1,19 @@
 import '../models/fixture.dart';
-import 'official_livescore_service.dart';
+import 'hybrid_football_service.dart';
 
 class CountryMatchesService {
-  final OfficialLiveScoreService _officialService = OfficialLiveScoreService();
+  final HybridFootballService _hybridService = HybridFootballService();
   
   /// Ottiene le partite raggruppate per paese
   Future<Map<String, List<Fixture>>> getMatchesByCountry() async {
     try {
-      print('🌍 Recupero partite raggruppate per paese dalle API ufficiali...');
+      print('🌍 Recupero partite raggruppate per paese da LiveScore API...');
       
-      // Recupera tutte le partite dalle API ufficiali
-      final allFixtures = await _officialService.getFixturesToday();
+      // Recupera tutte le partite da LiveScore API tramite HybridFootballService
+      final allFixtures = await _hybridService.getFixturesToday();
       
       if (allFixtures.isEmpty) {
-        print('❌ Nessuna partita trovata dalle API ufficiali');
+        print('❌ Nessuna partita trovata da LiveScore API');
         return {};
       }
       

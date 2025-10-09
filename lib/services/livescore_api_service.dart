@@ -250,21 +250,60 @@ class LiveScoreApiService {
       String league = 'Competizione Sconosciuta';
       String country = 'Paese Sconosciuto';
       
+      // Parse della lega/competizione
       if (match['competition'] != null && match['competition']['name'] != null) {
         league = match['competition']['name'].toString();
       } else if (match['league'] != null) {
-        league = match['league']['name'] ?? match['league'].toString();
+        if (match['league']['name'] != null) {
+          league = match['league']['name'].toString();
+        } else {
+          league = match['league'].toString();
+        }
       } else if (match['competition_name'] != null) {
         league = match['competition_name'].toString();
       }
       
+      // Parse del paese - migliorato per gestire diversi formati API
+      bool countryFound = false;
+      
+      // Formato 1: country.name (per partite live)
       if (match['country'] != null && match['country']['name'] != null) {
         country = match['country']['name'].toString();
-      } else if (match['competition'] != null && match['competition']['country'] != null) {
-        country = match['competition']['country'].toString();
-      } else if (match['federation'] != null) {
-        country = match['federation'].toString();
-      } else {
+        countryFound = true;
+      }
+      // Formato 2: competition.country
+      else if (match['competition'] != null && match['competition']['country'] != null) {
+        if (match['competition']['country'] is Map && match['competition']['country']['name'] != null) {
+          country = match['competition']['country']['name'].toString();
+          countryFound = true;
+        } else {
+          country = match['competition']['country'].toString();
+          countryFound = true;
+        }
+      }
+      // Formato 3: league.country
+      else if (match['league'] != null && match['league']['country'] != null) {
+        if (match['league']['country'] is Map && match['league']['country']['name'] != null) {
+          country = match['league']['country']['name'].toString();
+          countryFound = true;
+        } else {
+          country = match['league']['country'].toString();
+          countryFound = true;
+        }
+      }
+      // Formato 4: federation
+      else if (match['federation'] != null) {
+        if (match['federation'] is Map && match['federation']['name'] != null) {
+          country = match['federation']['name'].toString();
+          countryFound = true;
+        } else {
+          country = match['federation'].toString();
+          countryFound = true;
+        }
+      }
+      
+      // Se non abbiamo trovato il paese, prova a dedurlo dalla lega
+      if (!countryFound) {
         country = _getCountryFromLeague(league);
       }
       
@@ -289,16 +328,83 @@ class LiveScoreApiService {
   String _getCountryFromLeague(String league) {
     final leagueLower = league.toLowerCase();
     
+    // Leghe europee principali
     if (leagueLower.contains('serie a') || leagueLower.contains('italian')) return 'Italy';
     if (leagueLower.contains('premier league') || leagueLower.contains('english')) return 'England';
     if (leagueLower.contains('la liga') || leagueLower.contains('spanish')) return 'Spain';
     if (leagueLower.contains('bundesliga') || leagueLower.contains('german')) return 'Germany';
     if (leagueLower.contains('ligue 1') || leagueLower.contains('french')) return 'France';
-    if (leagueLower.contains('champions league') || leagueLower.contains('europa league')) return 'International';
-    if (leagueLower.contains('portugal')) return 'Portugal';
-    if (leagueLower.contains('netherlands')) return 'Netherlands';
-    if (leagueLower.contains('brazil')) return 'Brazil';
-    if (leagueLower.contains('argentina')) return 'Argentina';
+    
+    // Competizioni internazionali
+    if (leagueLower.contains('champions league') || 
+        leagueLower.contains('europa league') || 
+        leagueLower.contains('uefa') ||
+        leagueLower.contains('world cup') ||
+        leagueLower.contains('euro') ||
+        leagueLower.contains('nations league') ||
+        leagueLower.contains('friendlies') ||
+        leagueLower.contains('national teams')) return 'International';
+    
+    // Altri paesi europei
+    if (leagueLower.contains('portugal') || leagueLower.contains('primeira liga')) return 'Portugal';
+    if (leagueLower.contains('netherlands') || leagueLower.contains('eredivisie')) return 'Netherlands';
+    if (leagueLower.contains('belgium') || leagueLower.contains('pro league')) return 'Belgium';
+    if (leagueLower.contains('scotland') || leagueLower.contains('scottish')) return 'Scotland';
+    if (leagueLower.contains('turkey') || leagueLower.contains('turkish')) return 'Turkey';
+    if (leagueLower.contains('russia') || leagueLower.contains('russian')) return 'Russia';
+    if (leagueLower.contains('ukraine') || leagueLower.contains('ukrainian')) return 'Ukraine';
+    if (leagueLower.contains('poland') || leagueLower.contains('polish')) return 'Poland';
+    if (leagueLower.contains('czech') || leagueLower.contains('czechia')) return 'Czech Republic';
+    if (leagueLower.contains('austria') || leagueLower.contains('austrian')) return 'Austria';
+    if (leagueLower.contains('switzerland') || leagueLower.contains('swiss')) return 'Switzerland';
+    if (leagueLower.contains('greece') || leagueLower.contains('greek')) return 'Greece';
+    if (leagueLower.contains('croatia') || leagueLower.contains('croatian')) return 'Croatia';
+    if (leagueLower.contains('serbia') || leagueLower.contains('serbian')) return 'Serbia';
+    if (leagueLower.contains('denmark') || leagueLower.contains('danish')) return 'Denmark';
+    if (leagueLower.contains('sweden') || leagueLower.contains('swedish')) return 'Sweden';
+    if (leagueLower.contains('norway') || leagueLower.contains('norwegian')) return 'Norway';
+    
+    // Sud America
+    if (leagueLower.contains('brazil') || leagueLower.contains('brasileiro') || leagueLower.contains('serie b')) return 'Brazil';
+    if (leagueLower.contains('argentina') || leagueLower.contains('argentinian')) return 'Argentina';
+    if (leagueLower.contains('colombia') || leagueLower.contains('colombian')) return 'Colombia';
+    if (leagueLower.contains('chile') || leagueLower.contains('chilean') || leagueLower.contains('primera division')) return 'Chile';
+    if (leagueLower.contains('uruguay') || leagueLower.contains('uruguayan')) return 'Uruguay';
+    if (leagueLower.contains('peru') || leagueLower.contains('peruvian')) return 'Peru';
+    if (leagueLower.contains('ecuador') || leagueLower.contains('ecuadorian')) return 'Ecuador';
+    if (leagueLower.contains('venezuela') || leagueLower.contains('venezuelan')) return 'Venezuela';
+    if (leagueLower.contains('bolivia') || leagueLower.contains('bolivian')) return 'Bolivia';
+    if (leagueLower.contains('paraguay') || leagueLower.contains('paraguayan')) return 'Paraguay';
+    
+    // Nord America
+    if (leagueLower.contains('mls') || leagueLower.contains('usa') || leagueLower.contains('united states')) return 'United States';
+    if (leagueLower.contains('canada') || leagueLower.contains('canadian')) return 'Canada';
+    if (leagueLower.contains('mexico') || leagueLower.contains('mexican')) return 'Mexico';
+    
+    // Asia
+    if (leagueLower.contains('japan') || leagueLower.contains('j-league')) return 'Japan';
+    if (leagueLower.contains('china') || leagueLower.contains('chinese')) return 'China';
+    if (leagueLower.contains('south korea') || leagueLower.contains('korean')) return 'South Korea';
+    if (leagueLower.contains('saudi') || leagueLower.contains('arabia')) return 'Saudi Arabia';
+    if (leagueLower.contains('uae') || leagueLower.contains('emirates')) return 'UAE';
+    if (leagueLower.contains('qatar') || leagueLower.contains('qatari')) return 'Qatar';
+    if (leagueLower.contains('iran') || leagueLower.contains('iranian')) return 'Iran';
+    if (leagueLower.contains('iraq') || leagueLower.contains('iraqi')) return 'Iraq';
+    if (leagueLower.contains('india') || leagueLower.contains('indian')) return 'India';
+    if (leagueLower.contains('australia') || leagueLower.contains('a-league')) return 'Australia';
+    
+    // Africa
+    if (leagueLower.contains('egypt') || leagueLower.contains('egyptian')) return 'Egypt';
+    if (leagueLower.contains('morocco') || leagueLower.contains('moroccan')) return 'Morocco';
+    if (leagueLower.contains('tunisia') || leagueLower.contains('tunisian')) return 'Tunisia';
+    if (leagueLower.contains('algeria') || leagueLower.contains('algerian')) return 'Algeria';
+    if (leagueLower.contains('south africa') || leagueLower.contains('african')) return 'South Africa';
+    if (leagueLower.contains('nigeria') || leagueLower.contains('nigerian')) return 'Nigeria';
+    if (leagueLower.contains('ghana') || leagueLower.contains('ghanaian')) return 'Ghana';
+    if (leagueLower.contains('ivory coast') || leagueLower.contains('ivorian')) return 'Ivory Coast';
+    if (leagueLower.contains('senegal') || leagueLower.contains('senegalese')) return 'Senegal';
+    if (leagueLower.contains('cameroon') || leagueLower.contains('cameroonian')) return 'Cameroon';
+    if (leagueLower.contains('angola') || leagueLower.contains('angolan')) return 'Angola';
     
     return 'International';
   }
