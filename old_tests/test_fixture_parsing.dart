@@ -1,5 +1,4 @@
-import 'dart:convert';
-import 'lib/models/fixture.dart';
+import 'package:live_bot/models/fixture.dart';
 
 void main() {
   print('Test parsing Fixture con formato LiveScore...');
