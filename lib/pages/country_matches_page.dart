@@ -273,14 +273,59 @@ class _CountryMatchesPageState extends State<CountryMatchesPage> {
       );
     }
 
-    return ListView.builder(
-      itemCount: _matchesByCountry.length,
-      itemBuilder: (context, index) {
-        final country = _matchesByCountry.keys.elementAt(index);
-        final matches = _matchesByCountry[country]!;
-        
-        return _buildCountrySection(country, matches);
-      },
+    return Column(
+      children: [
+        // Header informativo
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16.0),
+          margin: const EdgeInsets.all(8.0),
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(8.0),
+            border: Border.all(color: Colors.blue.shade200),
+          ),
+          child: Column(
+            children: [
+              const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.info_outline, color: Colors.blue),
+                  SizedBox(width: 8),
+                  Text(
+                    'Partite Raggruppate per Paese',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${_matchesByCountry.length} paesi • ${_matchesByCountry.values.fold(0, (sum, matches) => sum + matches.length)} partite totali',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.blue.shade700,
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Lista delle partite raggruppate
+        Expanded(
+          child: ListView.builder(
+            itemCount: _matchesByCountry.length,
+            itemBuilder: (context, index) {
+              final country = _matchesByCountry.keys.elementAt(index);
+              final matches = _matchesByCountry[country]!;
+              
+              return _buildCountrySection(country, matches);
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -291,6 +336,7 @@ class _CountryMatchesPageState extends State<CountryMatchesPage> {
     return Card(
       margin: const EdgeInsets.all(8.0),
       child: ExpansionTile(
+        initiallyExpanded: true, // 🎯 ESPANDI AUTOMATICAMENTE TUTTE LE SEZIONI
         title: Row(
           children: [
             _getCountryFlag(country),
@@ -428,6 +474,14 @@ class _CountryMatchesPageState extends State<CountryMatchesPage> {
       'Japan': '🇯🇵',
       'South Korea': '🇰🇷',
       'Australia': '🇦🇺',
+      'Ecuador': '🇪🇨',
+      'Chile': '🇨🇱',
+      'Colombia': '🇨🇴',
+      'Peru': '🇵🇪',
+      'Uruguay': '🇺🇾',
+      'Paraguay': '🇵🇾',
+      'Venezuela': '🇻🇪',
+      'Bolivia': '🇧🇴',
       'International': '🌍',
       'Other': '⚽',
     };
