@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../models/fixture.dart';
 
@@ -29,12 +28,6 @@ class LiveScoreApiService {
     }
     
     try {
-      // Verifica connessione internet
-      final result = await InternetAddress.lookup('livescore-api.com');
-      if (result.isEmpty || result[0].rawAddress.isEmpty) {
-        throw Exception('Nessuna connessione internet disponibile');
-      }
-      
       // Richiesta partite di oggi (usando fixtures endpoint)
       final url = Uri.parse('$_baseUrl/fixtures/matches.json?key=$_apiKey&secret=$_apiSecret');
       
@@ -67,8 +60,6 @@ class LiveScoreApiService {
       
       return fixtures;
       
-    } on SocketException catch (e) {
-      throw Exception('Errore di connessione a LiveScore API: $e');
     } on FormatException catch (e) {
       throw Exception('Errore formato risposta LiveScore API: $e');
     } catch (e) {
@@ -85,12 +76,6 @@ class LiveScoreApiService {
     }
     
     try {
-      // Verifica connessione internet
-      final result = await InternetAddress.lookup('livescore-api.com');
-      if (result.isEmpty || result[0].rawAddress.isEmpty) {
-        throw Exception('Nessuna connessione internet disponibile');
-      }
-      
       // Richiesta partite live (usando matches/live.json per dati più ricchi)
       final url = Uri.parse('$_baseUrl/matches/live.json?key=$_apiKey&secret=$_apiSecret');
       
@@ -123,8 +108,6 @@ class LiveScoreApiService {
       print('LiveScoreApiService: Trovate ${liveFixtures.length} partite live');
       return liveFixtures;
       
-    } on SocketException catch (e) {
-      throw Exception('Errore di connessione a LiveScore API: $e');
     } on FormatException catch (e) {
       throw Exception('Errore formato risposta LiveScore API: $e');
     } catch (e) {
@@ -329,13 +312,6 @@ class LiveScoreApiService {
     }
     
     try {
-      // Verifica connessione internet
-      final result = await InternetAddress.lookup('livescore-api.com');
-      if (result.isEmpty || result[0].rawAddress.isEmpty) {
-        print('LiveScoreApiService: Nessuna connessione internet');
-        return false;
-      }
-      
       // Test con endpoint di live matches (usando matches/live.json)
       final url = Uri.parse('$_baseUrl/matches/live.json?key=$_apiKey&secret=$_apiSecret');
       
