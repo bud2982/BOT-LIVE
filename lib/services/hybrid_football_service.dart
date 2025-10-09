@@ -1,5 +1,5 @@
-import 'package:live_bot/services/livescore_api_service.dart';
-import 'package:live_bot/models/fixture.dart';
+import 'livescore_api_service.dart';
+import '../models/fixture.dart';
 
 class HybridFootballService {
   final LiveScoreApiService _liveScoreApiService;
