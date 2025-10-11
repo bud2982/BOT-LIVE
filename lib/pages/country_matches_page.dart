@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/country_matches_service.dart';
 import '../services/telegram_service.dart';
 import '../services/followed_matches_service.dart';
+import '../services/favorites_service.dart';
 import '../models/fixture.dart';
 
 class CountryMatchesPage extends StatefulWidget {
@@ -16,6 +17,7 @@ class _CountryMatchesPageState extends State<CountryMatchesPage> {
   final CountryMatchesService _countryService = CountryMatchesService();
   final TelegramService _telegramService = TelegramService();
   final FollowedMatchesService _followedService = FollowedMatchesService();
+  final FavoritesService _favoritesService = FavoritesService.instance;
   
   Map<String, List<Fixture>> _matchesByCountry = {};
   Set<int> _followedMatchIds = {};
@@ -26,6 +28,19 @@ class _CountryMatchesPageState extends State<CountryMatchesPage> {
   void initState() {
     super.initState();
     _loadMatchesByCountry();
+    _favoritesService.addListener(_onFavoritesChanged);
+  }
+
+  @override
+  void dispose() {
+    _favoritesService.removeListener(_onFavoritesChanged);
+    super.dispose();
+  }
+
+  void _onFavoritesChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _loadMatchesByCountry() async {
@@ -106,6 +121,33 @@ class _CountryMatchesPageState extends State<CountryMatchesPage> {
             ),
           );
         }
+      }
+    }
+  }
+
+  Future<void> _toggleFavoriteMatch(Fixture match) async {
+    final favoritesService = FavoritesService.instance;
+    final isFavorite = favoritesService.isFavorite(match.id);
+    
+    if (isFavorite) {
+      await favoritesService.removeFromFavorites(match.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('💔 ${match.home} vs ${match.away} rimosso dai preferiti'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } else {
+      await favoritesService.addToFavorites(match.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⭐ ${match.home} vs ${match.away} aggiunto ai preferiti'),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
     }
   }
@@ -391,70 +433,82 @@ class _CountryMatchesPageState extends State<CountryMatchesPage> {
   Widget _buildMatchTile(Fixture match) {
     final isFollowed = _followedMatchIds.contains(match.id);
     final isLive = match.elapsed != null;
-    
-    return ListTile(
-      leading: Icon(
-        Icons.sports_soccer, 
-        color: isLive ? Colors.red : Colors.green,
-      ),
-      title: Row(
-        children: [
-          Expanded(
-            child: Text('${match.home} vs ${match.away}'),
+    final isFavorite = FavoritesService.instance.isFavorite(match.id);
+        
+        return ListTile(
+          leading: Icon(
+            Icons.sports_soccer, 
+            color: isLive ? Colors.red : Colors.green,
           ),
-          if (isLive)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.red,
-                borderRadius: BorderRadius.circular(8),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text('${match.home} vs ${match.away}'),
               ),
-              child: const Text(
-                'LIVE',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
+              if (isLive)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'LIVE',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('🏆 ${match.league}'),
+              Text('⏰ ${_formatDateTime(match.start)}'),
+              if (match.elapsed != null) Text('⏱️ ${match.elapsed}\''),
+            ],
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '${match.goalsHome} - ${match.goalsAway}',
+                style: const TextStyle(
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-            ),
-        ],
-      ),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('🏆 ${match.league}'),
-          Text('⏰ ${_formatDateTime(match.start)}'),
-          if (match.elapsed != null) Text('⏱️ ${match.elapsed}\''),
-        ],
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '${match.goalsHome} - ${match.goalsAway}',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+              const SizedBox(width: 8),
+              // Pulsante per seguire la partita (sistema esistente)
+              IconButton(
+                icon: Icon(
+                  isFollowed ? Icons.favorite : Icons.favorite_border,
+                  color: isFollowed ? Colors.red : Colors.grey,
+                ),
+                onPressed: () => _toggleFollowMatch(match),
+                tooltip: isFollowed ? 'Non seguire più' : 'Segui partita',
+              ),
+              // Pulsante per i preferiti (nuovo sistema)
+              IconButton(
+                icon: Icon(
+                  isFavorite ? Icons.star : Icons.star_border,
+                  color: isFavorite ? Colors.amber : Colors.grey,
+                ),
+                onPressed: () => _toggleFavoriteMatch(match),
+                tooltip: isFavorite ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti',
+              ),
+              // Pulsante per le notifiche Telegram
+              IconButton(
+                icon: const Icon(Icons.notifications, color: Colors.orange),
+                onPressed: () => _subscribeToMatch(match),
+                tooltip: 'Ricevi notifiche Telegram',
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: Icon(
-              isFollowed ? Icons.favorite : Icons.favorite_border,
-              color: isFollowed ? Colors.red : Colors.grey,
-            ),
-            onPressed: () => _toggleFollowMatch(match),
-            tooltip: isFollowed ? 'Non seguire più' : 'Segui partita',
-          ),
-          IconButton(
-            icon: const Icon(Icons.notifications, color: Colors.orange),
-            onPressed: () => _subscribeToMatch(match),
-            tooltip: 'Ricevi notifiche Telegram',
-          ),
-        ],
-      ),
-    );
+        );
   }
 
   Widget _getCountryFlag(String country) {
