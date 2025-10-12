@@ -247,8 +247,8 @@ class LiveScoreApiService {
       }
       
       // Parse competizione e paese (formato LiveScore API)
-      String league = 'Competizione Sconosciuta';
-      String country = 'Paese Sconosciuto';
+      String league = 'Unknown League';
+      String country = 'International';
       
       // Parse della lega/competizione
       if (match['competition'] != null && match['competition']['name'] != null) {
@@ -266,45 +266,91 @@ class LiveScoreApiService {
       // Parse del paese - migliorato per gestire diversi formati API
       bool countryFound = false;
       
-      // Formato 1: country.name (per partite live)
-      if (match['country'] != null && match['country']['name'] != null) {
+      print('LiveScoreApiService: Parsing paese per partita $homeTeam vs $awayTeam');
+      print('LiveScoreApiService: Struttura match keys: ${match.keys.toList()}');
+      
+      // Formato 1: country come stringa diretta
+      if (match['country'] != null && match['country'] is String) {
+        country = match['country'].toString();
+        countryFound = true;
+        print('LiveScoreApiService: Paese trovato (formato stringa): $country');
+      }
+      // Formato 2: country.name (per partite live)
+      else if (match['country'] != null && match['country'] is Map && match['country']['name'] != null) {
         country = match['country']['name'].toString();
         countryFound = true;
+        print('LiveScoreApiService: Paese trovato (formato country.name): $country');
       }
-      // Formato 2: competition.country
-      else if (match['competition'] != null && match['competition']['country'] != null) {
+      // Formato 3: location.country
+      else if (match['location'] != null && match['location'] is Map) {
+        if (match['location']['country'] != null) {
+          if (match['location']['country'] is Map && match['location']['country']['name'] != null) {
+            country = match['location']['country']['name'].toString();
+            countryFound = true;
+            print('LiveScoreApiService: Paese trovato (formato location.country.name): $country');
+          } else if (match['location']['country'] is String) {
+            country = match['location']['country'].toString();
+            countryFound = true;
+            print('LiveScoreApiService: Paese trovato (formato location.country): $country');
+          }
+        }
+      }
+      // Formato 4: competition.country
+      else if (match['competition'] != null && match['competition'] is Map && match['competition']['country'] != null) {
         if (match['competition']['country'] is Map && match['competition']['country']['name'] != null) {
           country = match['competition']['country']['name'].toString();
           countryFound = true;
-        } else {
+          print('LiveScoreApiService: Paese trovato (formato competition.country.name): $country');
+        } else if (match['competition']['country'] is String) {
           country = match['competition']['country'].toString();
           countryFound = true;
+          print('LiveScoreApiService: Paese trovato (formato competition.country): $country');
         }
       }
-      // Formato 3: league.country
-      else if (match['league'] != null && match['league']['country'] != null) {
+      // Formato 5: league.country
+      else if (match['league'] != null && match['league'] is Map && match['league']['country'] != null) {
         if (match['league']['country'] is Map && match['league']['country']['name'] != null) {
           country = match['league']['country']['name'].toString();
           countryFound = true;
-        } else {
+          print('LiveScoreApiService: Paese trovato (formato league.country.name): $country');
+        } else if (match['league']['country'] is String) {
           country = match['league']['country'].toString();
           countryFound = true;
+          print('LiveScoreApiService: Paese trovato (formato league.country): $country');
         }
       }
-      // Formato 4: federation
+      // Formato 6: federation
       else if (match['federation'] != null) {
         if (match['federation'] is Map && match['federation']['name'] != null) {
           country = match['federation']['name'].toString();
           countryFound = true;
-        } else {
+          print('LiveScoreApiService: Paese trovato (formato federation.name): $country');
+        } else if (match['federation'] is String) {
           country = match['federation'].toString();
           countryFound = true;
+          print('LiveScoreApiService: Paese trovato (formato federation): $country');
         }
       }
       
       // Se non abbiamo trovato il paese, prova a dedurlo dalla lega
       if (!countryFound) {
-        country = _getCountryFromLeague(league);
+        // Estrai competition_id se disponibile
+        int? competitionId;
+        if (match['competition_id'] != null) {
+          competitionId = int.tryParse(match['competition_id'].toString());
+        } else if (match['competition'] != null && match['competition'] is Map && match['competition']['id'] != null) {
+          competitionId = int.tryParse(match['competition']['id'].toString());
+        }
+        
+        print('LiveScoreApiService: Paese non trovato nei dati API, deduzione dalla lega: $league (competition_id: $competitionId)');
+        print('LiveScoreApiService: Struttura completa match per debug:');
+        print('  - competition: ${match['competition']}');
+        print('  - league: ${match['league']}');
+        print('  - country: ${match['country']}');
+        print('  - location: ${match['location']}');
+        print('  - federation: ${match['federation']}');
+        country = _getCountryFromLeague(league, competitionId);
+        print('LiveScoreApiService: Paese dedotto: $country');
       }
       
       return Fixture(
@@ -325,15 +371,88 @@ class LiveScoreApiService {
     }
   }
   
-  String _getCountryFromLeague(String league) {
+  String _getCountryFromLeague(String league, [int? competitionId]) {
     final leagueLower = league.toLowerCase();
+    print('_getCountryFromLeague: Analizzando "$league" (lowercase: "$leagueLower", competitionId: $competitionId)');
+    
+    // Prima controlla se possiamo usare il competition_id per disambiguare
+    if (competitionId != null) {
+      // Mappa dei competition_id noti
+      switch (competitionId) {
+        // Spagna
+        case 79: return 'Spain'; // Segunda División (Spagna)
+        case 332: return 'Spain'; // Segunda B (Spagna)
+        
+        // Uruguay
+        case 401: return 'Uruguay'; // Segunda División (Uruguay)
+        case 48: return 'Uruguay'; // Primera División (Uruguay)
+        
+        // Perù
+        case 406: return 'Peru'; // Segunda División (Perù)
+        case 47: return 'Peru'; // Liga 1 / Primera División (Perù)
+        
+        // Argentina
+        case 23: return 'Argentina'; // Liga Professional
+        case 96: return 'Argentina'; // Primera Nacional
+        case 233: return 'Argentina'; // Primera B Metropolitana
+        case 234: return 'Argentina'; // Torneo Federal A
+        
+        // Brasile
+        case 508: return 'Brazil'; // Copa Santa Catarina
+        case 509: return 'Brazil'; // Copa Gaúcha
+        case 13: return 'Brazil'; // Brasileiro Serie A
+        case 14: return 'Brazil'; // Brasileiro Serie B
+        
+        // Chile
+        case 259: return 'Chile'; // Primera B
+        case 260: return 'Chile'; // Copa Chile
+        case 46: return 'Chile'; // Primera División
+        
+        // Colombia
+        case 45: return 'Colombia'; // Primera A
+        
+        // Ecuador
+        case 398: return 'Ecuador'; // Liga Pro Serie B
+        case 44: return 'Ecuador'; // Liga Pro Serie A
+        
+        // Italia
+        case 207: return 'Italy'; // Serie C
+        case 11: return 'Italy'; // Serie A
+        case 12: return 'Italy'; // Serie B
+        
+        // USA
+        case 384: return 'United States'; // USL League One
+        case 253: return 'United States'; // MLS
+        
+        // Inghilterra
+        case 2: return 'England'; // Premier League
+        case 3: return 'England'; // Championship
+        
+        // Competizioni internazionali
+        case 359: return 'International'; // World Cup CAF Qualifiers
+        case 352: return 'International'; // World Cup UEFA Qualifiers
+      }
+    }
     
     // Leghe europee principali
-    if (leagueLower.contains('serie a') || leagueLower.contains('italian')) return 'Italy';
-    if (leagueLower.contains('premier league') || leagueLower.contains('english')) return 'England';
-    if (leagueLower.contains('la liga') || leagueLower.contains('spanish')) return 'Spain';
-    if (leagueLower.contains('bundesliga') || leagueLower.contains('german')) return 'Germany';
-    if (leagueLower.contains('ligue 1') || leagueLower.contains('french')) return 'France';
+    // Italia - Escludi "Liga Pro Serie B" (Ecuador)
+    if (leagueLower.contains('serie a') && !leagueLower.contains('brazil') && !leagueLower.contains('liga pro')) return 'Italy';
+    if (leagueLower.contains('serie b') && !leagueLower.contains('brazil') && !leagueLower.contains('liga pro')) return 'Italy';
+    if (leagueLower.contains('serie c') && !leagueLower.contains('brazil') && !leagueLower.contains('liga pro')) return 'Italy';
+    if (leagueLower.contains('coppa italia')) return 'Italy';
+    if (leagueLower.contains('premier league') && !leagueLower.contains('canada')) return 'England';
+    if (leagueLower.contains('championship') || leagueLower.contains('efl')) return 'England';
+    if (leagueLower.contains('fa cup') || leagueLower.contains('carabao')) return 'England';
+    if (leagueLower.contains('la liga') || leagueLower.contains('laliga')) return 'Spain';
+    if (leagueLower.contains('segunda division') && leagueLower.contains('spain')) return 'Spain';
+    if (leagueLower.contains('segunda b') && !leagueLower.contains('argentina')) return 'Spain';
+    if (leagueLower.contains('copa del rey')) return 'Spain';
+    if (leagueLower.contains('bundesliga')) return 'Germany';
+    if (leagueLower.contains('2. bundesliga')) return 'Germany';
+    if (leagueLower.contains('dfb-pokal') || leagueLower.contains('dfb pokal')) return 'Germany';
+    if (leagueLower.contains('ligue 1') || leagueLower.contains('ligue1')) return 'France';
+    if (leagueLower.contains('ligue 2') || leagueLower.contains('ligue2')) return 'France';
+    if (leagueLower.contains('coupe de france')) return 'France';
     
     // Competizioni internazionali
     if (leagueLower.contains('champions league') || 
@@ -343,7 +462,9 @@ class LiveScoreApiService {
         leagueLower.contains('euro') ||
         leagueLower.contains('nations league') ||
         leagueLower.contains('friendlies') ||
-        leagueLower.contains('national teams')) return 'International';
+        leagueLower.contains('national teams')) {
+      return 'International';
+    }
     
     // Altri paesi europei
     if (leagueLower.contains('portugal') || leagueLower.contains('primeira liga')) return 'Portugal';
@@ -365,21 +486,94 @@ class LiveScoreApiService {
     if (leagueLower.contains('norway') || leagueLower.contains('norwegian')) return 'Norway';
     
     // Sud America
-    if (leagueLower.contains('brazil') || leagueLower.contains('brasileiro') || leagueLower.contains('serie b')) return 'Brazil';
-    if (leagueLower.contains('argentina') || leagueLower.contains('argentinian')) return 'Argentina';
-    if (leagueLower.contains('colombia') || leagueLower.contains('colombian')) return 'Colombia';
-    if (leagueLower.contains('chile') || leagueLower.contains('chilean') || leagueLower.contains('primera division')) return 'Chile';
-    if (leagueLower.contains('uruguay') || leagueLower.contains('uruguayan')) return 'Uruguay';
-    if (leagueLower.contains('peru') || leagueLower.contains('peruvian')) return 'Peru';
-    if (leagueLower.contains('ecuador') || leagueLower.contains('ecuadorian')) return 'Ecuador';
+    // Brasile
+    if (leagueLower.contains('brasileiro') || 
+        leagueLower.contains('campeonato brasileiro') ||
+        (leagueLower.contains('serie') && leagueLower.contains('brazil')) ||
+        leagueLower.contains('copa do brasil') ||
+        leagueLower.contains('copa gaúcha') ||
+        leagueLower.contains('copa santa catarina') ||
+        leagueLower.contains('paulista') ||
+        leagueLower.contains('carioca') ||
+        leagueLower.contains('mineiro')) {
+      return 'Brazil';
+    }
+    
+    // Argentina
+    if (leagueLower.contains('liga professional') ||
+        leagueLower.contains('primera nacional') ||
+        leagueLower.contains('primera b metropolitana') ||
+        leagueLower.contains('torneo federal') ||
+        leagueLower.contains('copa argentina') ||
+        (leagueLower.contains('argentina') && !leagueLower.contains('copa'))) {
+      return 'Argentina';
+    }
+    
+    // Chile
+    if (leagueLower.contains('primera b') && !leagueLower.contains('argentina') ||
+        leagueLower.contains('copa chile') ||
+        (leagueLower.contains('primera division') && !leagueLower.contains('peru')) ||
+        leagueLower.contains('chilean')) {
+      return 'Chile';
+    }
+    
+    // Peru
+    if (leagueLower.contains('segunda division') && leagueLower.contains('peru') ||
+        leagueLower.contains('peruvian') ||
+        leagueLower.contains('liga 1') && leagueLower.contains('peru')) {
+      return 'Peru';
+    }
+    
+    // Uruguay
+    if (leagueLower.contains('segunda division') && leagueLower.contains('uruguay') ||
+        leagueLower.contains('uruguayan') ||
+        leagueLower.contains('primera division') && leagueLower.contains('uruguay')) {
+      return 'Uruguay';
+    }
+    
+    // Colombia
+    if (leagueLower.contains('primera a') ||
+        leagueLower.contains('colombian') ||
+        leagueLower.contains('categoria primera')) {
+      return 'Colombia';
+    }
+    
+    // Altri paesi sudamericani
+    // Ecuador - DEVE essere prima del check per "Serie B" italiana!
+    if (leagueLower.contains('liga pro') || 
+        leagueLower.contains('ecuador') || 
+        leagueLower.contains('ecuadorian')) {
+      return 'Ecuador';
+    }
     if (leagueLower.contains('venezuela') || leagueLower.contains('venezuelan')) return 'Venezuela';
     if (leagueLower.contains('bolivia') || leagueLower.contains('bolivian')) return 'Bolivia';
     if (leagueLower.contains('paraguay') || leagueLower.contains('paraguayan')) return 'Paraguay';
     
     // Nord America
-    if (leagueLower.contains('mls') || leagueLower.contains('usa') || leagueLower.contains('united states')) return 'United States';
-    if (leagueLower.contains('canada') || leagueLower.contains('canadian')) return 'Canada';
-    if (leagueLower.contains('mexico') || leagueLower.contains('mexican')) return 'Mexico';
+    // USA
+    if (leagueLower.contains('mls') || 
+        leagueLower.contains('usl') ||
+        leagueLower.contains('nwsl') ||
+        leagueLower.contains('us open cup') ||
+        (leagueLower.contains('usa') && !leagueLower.contains('vs')) ||
+        leagueLower.contains('united states')) {
+      return 'United States';
+    }
+    
+    // Canada
+    if (leagueLower.contains('canadian premier league') ||
+        leagueLower.contains('canada') ||
+        leagueLower.contains('canadian')) {
+      return 'Canada';
+    }
+    
+    // Mexico
+    if (leagueLower.contains('liga mx') ||
+        leagueLower.contains('mexico') ||
+        leagueLower.contains('mexican') ||
+        leagueLower.contains('copa mx')) {
+      return 'Mexico';
+    }
     
     // Asia
     if (leagueLower.contains('japan') || leagueLower.contains('j-league')) return 'Japan';

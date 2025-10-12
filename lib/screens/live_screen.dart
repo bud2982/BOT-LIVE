@@ -4,14 +4,14 @@ import '../models/fixture.dart';
 import '../services/hybrid_football_service.dart';
 import '../services/followed_matches_service.dart';
 
-class LiveResultsPage extends StatefulWidget {
-  const LiveResultsPage({super.key});
+class LiveScreen extends StatefulWidget {
+  const LiveScreen({super.key});
 
   @override
-  State<LiveResultsPage> createState() => _LiveResultsPageState();
+  State<LiveScreen> createState() => _LiveScreenState();
 }
 
-class _LiveResultsPageState extends State<LiveResultsPage> {
+class _LiveScreenState extends State<LiveScreen> {
   List<Fixture> _liveMatches = [];
   bool _isLoading = true;
   String? _error;
@@ -42,6 +42,8 @@ class _LiveResultsPageState extends State<LiveResultsPage> {
 
   Future<void> _loadLiveMatches() async {
     try {
+      if (!mounted) return;
+      
       setState(() {
         _isLoading = true;
         _error = null;
@@ -54,22 +56,34 @@ class _LiveResultsPageState extends State<LiveResultsPage> {
         return match.elapsed != null && match.elapsed! > 0;
       }).toList();
 
-      // Ordina per minuti trascorsi (partite più avanzate prima)
+      // Ordina per paese e poi per minuti trascorsi
       liveMatches.sort((a, b) {
+        // Prima ordina per paese
+        final countryA = a.country ?? 'International';
+        final countryB = b.country ?? 'International';
+        final countryCompare = countryA.compareTo(countryB);
+        if (countryCompare != 0) return countryCompare;
+        
+        // Poi per minuti trascorsi (partite più avanzate prima)
         final elapsedA = a.elapsed ?? 0;
         final elapsedB = b.elapsed ?? 0;
         return elapsedB.compareTo(elapsedA);
       });
 
-      setState(() {
-        _liveMatches = liveMatches;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _liveMatches = liveMatches;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _error = 'Errore nel caricamento: $e';
-        _isLoading = false;
-      });
+      print('Errore caricamento partite live: $e');
+      if (mounted) {
+        setState(() {
+          _error = 'Errore nel caricamento: $e';
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -81,7 +95,7 @@ class _LiveResultsPageState extends State<LiveResultsPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${fixture.home} vs ${fixture.away} rimossa dalle partite seguite'),
+            content: Text('${fixture.home} vs ${fixture.away} non più seguita'),
             backgroundColor: Colors.orange,
             duration: const Duration(seconds: 2),
           ),
@@ -92,7 +106,7 @@ class _LiveResultsPageState extends State<LiveResultsPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${fixture.home} vs ${fixture.away} aggiunta alle partite seguite'),
+            content: Text('${fixture.home} vs ${fixture.away} ora seguita'),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 2),
           ),
@@ -100,24 +114,43 @@ class _LiveResultsPageState extends State<LiveResultsPage> {
       }
     }
     
-    // Aggiorna la UI
-    setState(() {});
+    // Aggiorna lo stato per riflettere il cambiamento
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   String _getMatchStatus(Fixture fixture) {
-    if (fixture.elapsed == null) return 'Non iniziata';
-    if (fixture.elapsed! <= 0) return 'Non iniziata';
-    if (fixture.elapsed! <= 45) return '${fixture.elapsed}\'';
-    if (fixture.elapsed! <= 90) return '${fixture.elapsed}\'';
-    if (fixture.elapsed! > 90) return '${fixture.elapsed}\' +';
+    final elapsed = fixture.elapsed;
+    if (elapsed == null) return 'Non iniziata';
+    if (elapsed <= 0) return 'Non iniziata';
+    if (elapsed <= 45) return '$elapsed\'';
+    if (elapsed <= 90) return '$elapsed\'';
+    if (elapsed > 90) return '$elapsed\' +';
     return 'LIVE';
   }
 
   Color _getStatusColor(Fixture fixture) {
-    if (fixture.elapsed == null || fixture.elapsed! <= 0) return Colors.grey;
-    if (fixture.elapsed! <= 45) return Colors.green;
-    if (fixture.elapsed! <= 90) return Colors.orange;
+    final elapsed = fixture.elapsed;
+    if (elapsed == null || elapsed <= 0) return Colors.grey;
+    if (elapsed <= 45) return Colors.green;
+    if (elapsed <= 90) return Colors.orange;
     return Colors.red;
+  }
+
+  // Raggruppa le partite per paese
+  Map<String, List<Fixture>> _groupByCountry() {
+    final Map<String, List<Fixture>> grouped = {};
+    
+    for (final match in _liveMatches) {
+      final country = match.country ?? 'International';
+      if (!grouped.containsKey(country)) {
+        grouped[country] = [];
+      }
+      grouped[country]!.add(match);
+    }
+    
+    return grouped;
   }
 
   @override
@@ -128,7 +161,7 @@ class _LiveResultsPageState extends State<LiveResultsPage> {
           children: [
             Icon(Icons.live_tv, color: Colors.red),
             SizedBox(width: 8),
-            Text('Risultati Live'),
+            Text('LIVE'),
           ],
         ),
         backgroundColor: Colors.black87,
@@ -229,16 +262,73 @@ class _LiveResultsPageState extends State<LiveResultsPage> {
       );
     }
 
+    // Raggruppa per paese
+    final groupedMatches = _groupByCountry();
+    final countries = groupedMatches.keys.toList()..sort();
+
     return RefreshIndicator(
       onRefresh: _loadLiveMatches,
       child: ListView.builder(
         padding: const EdgeInsets.all(8),
-        itemCount: _liveMatches.length,
+        itemCount: countries.length,
         itemBuilder: (context, index) {
-          final match = _liveMatches[index];
-          return _buildMatchCard(match);
+          final country = countries[index];
+          final matches = groupedMatches[country]!;
+          return _buildCountrySection(country, matches);
         },
       ),
+    );
+  }
+
+  Widget _buildCountrySection(String country, List<Fixture> matches) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header del paese
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          margin: const EdgeInsets.only(top: 8, bottom: 4),
+          decoration: BoxDecoration(
+            color: Colors.grey[200],
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.flag, size: 20, color: Colors.black87),
+              const SizedBox(width: 8),
+              Text(
+                country,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${matches.length} LIVE',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        
+        // Lista delle partite
+        ...matches.map((match) => _buildMatchCard(match)),
+        
+        const SizedBox(height: 8),
+      ],
     );
   }
 
@@ -269,7 +359,7 @@ class _LiveResultsPageState extends State<LiveResultsPage> {
                 children: [
                   Expanded(
                     child: Text(
-                      '${match.league} • ${match.country}',
+                      match.league,
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey[600],
@@ -284,13 +374,27 @@ class _LiveResultsPageState extends State<LiveResultsPage> {
                       color: statusColor,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Text(
-                      statusText,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          statusText,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -366,10 +470,10 @@ class _LiveResultsPageState extends State<LiveResultsPage> {
                       return IconButton(
                         icon: Icon(
                           isFollowed ? Icons.bookmark : Icons.bookmark_border,
-                          color: isFollowed ? Colors.deepPurple : Colors.grey,
+                          color: isFollowed ? Colors.purple : Colors.grey,
                         ),
                         onPressed: () => _toggleFollowed(match),
-                        tooltip: isFollowed ? 'Rimuovi dalle partite seguite' : 'Aggiungi alle partite seguite',
+                        tooltip: isFollowed ? 'Non seguire più' : 'Segui partita',
                       );
                     },
                   ),

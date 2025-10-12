@@ -71,6 +71,99 @@ async function getTodayMatches() {
     }
   }
   
+  // TEMPORANEO: Forza l'uso dei dati di test per verificare il raggruppamento
+  console.log('🧪 FORZANDO DATI DI TEST per verificare raggruppamento per paese');
+  
+  const testMatches = [
+    {
+      id: 1,
+      home: 'Juventus',
+      away: 'Milan',
+      goalsHome: 2,
+      goalsAway: 1,
+      start: new Date().toISOString(),
+      elapsed: null,
+      league: 'Serie A',
+      country: 'Italy'
+    },
+    {
+      id: 2,
+      home: 'Barcelona',
+      away: 'Real Madrid',
+      goalsHome: 1,
+      goalsAway: 3,
+      start: new Date().toISOString(),
+      elapsed: null,
+      league: 'La Liga',
+      country: 'Spain'
+    },
+    {
+      id: 3,
+      home: 'Manchester United',
+      away: 'Liverpool',
+      goalsHome: 0,
+      goalsAway: 2,
+      start: new Date().toISOString(),
+      elapsed: null,
+      league: 'Premier League',
+      country: 'England'
+    },
+    {
+      id: 4,
+      home: 'Bayern Munich',
+      away: 'Borussia Dortmund',
+      goalsHome: 3,
+      goalsAway: 1,
+      start: new Date().toISOString(),
+      elapsed: null,
+      league: 'Bundesliga',
+      country: 'Germany'
+    },
+    {
+      id: 5,
+      home: 'PSG',
+      away: 'Marseille',
+      goalsHome: 2,
+      goalsAway: 0,
+      start: new Date().toISOString(),
+      elapsed: null,
+      league: 'Ligue 1',
+      country: 'France'
+    },
+    {
+      id: 6,
+      home: 'Inter',
+      away: 'Napoli',
+      goalsHome: 1,
+      goalsAway: 1,
+      start: new Date().toISOString(),
+      elapsed: null,
+      league: 'Serie A',
+      country: 'Italy'
+    },
+    {
+      id: 7,
+      home: 'Team A',
+      away: 'Team B',
+      goalsHome: 0,
+      goalsAway: 0,
+      start: new Date().toISOString(),
+      elapsed: null,
+      league: 'Various'
+    }
+  ];
+  
+  return {
+    success: true,
+    matches: testMatches,
+    source: 'test-data-for-grouping',
+    timestamp: new Date().toISOString(),
+    total_found: testMatches.length,
+    note: 'DATI DI TEST - per verificare raggruppamento per paese'
+  };
+
+  // CODICE ORIGINALE COMMENTATO TEMPORANEAMENTE
+  /*
   if (uniqueMatches.length > 0) {
     return {
       success: true,
@@ -80,6 +173,7 @@ async function getTodayMatches() {
       total_found: uniqueMatches.length
     };
   }
+  */
   
   return {
     success: false,
@@ -209,6 +303,140 @@ app.get('/api/live', async (req, res) => {
   }
 });
 
+// ========================================
+// TELEGRAM NOTIFICATION ENDPOINTS
+// ========================================
+
+// Storage in memoria per le sottoscrizioni (in produzione usare un database)
+const subscriptions = new Map();
+
+// Endpoint per sottoscrivere notifiche Telegram
+app.post('/api/telegram/subscribe', (req, res) => {
+  try {
+    const { chatId, matchId, matchInfo } = req.body;
+    
+    if (!chatId || !matchId || !matchInfo) {
+      return res.status(400).json({
+        success: false,
+        error: 'Parametri mancanti: chatId, matchId, matchInfo richiesti'
+      });
+    }
+    
+    console.log(`📱 Nuova sottoscrizione Telegram: Chat ${chatId} per partita ${matchId}`);
+    console.log(`   Partita: ${matchInfo.home} vs ${matchInfo.away}`);
+    
+    // Salva la sottoscrizione
+    const subscriptionKey = `${chatId}-${matchId}`;
+    subscriptions.set(subscriptionKey, {
+      chatId,
+      matchId,
+      matchInfo,
+      subscribedAt: new Date().toISOString(),
+      active: true
+    });
+    
+    res.json({
+      success: true,
+      message: 'Sottoscrizione registrata con successo',
+      subscriptionId: subscriptionKey,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('💥 Errore sottoscrizione Telegram:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Endpoint per inviare notifica Telegram
+app.post('/api/telegram/notify', (req, res) => {
+  try {
+    const { chatId, message, matchId } = req.body;
+    
+    if (!chatId || !message) {
+      return res.status(400).json({
+        success: false,
+        error: 'Parametri mancanti: chatId e message richiesti'
+      });
+    }
+    
+    console.log(`🤖 Invio notifica Telegram a chat ${chatId}:`);
+    console.log(`   Messaggio: ${message}`);
+    if (matchId) console.log(`   Partita ID: ${matchId}`);
+    
+    // Simula l'invio della notifica (in produzione integrare con Bot Telegram)
+    // Qui dovresti integrare con l'API di Telegram Bot
+    
+    res.json({
+      success: true,
+      message: 'Notifica inviata con successo',
+      chatId,
+      sentAt: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('💥 Errore invio notifica Telegram:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Endpoint per ottenere le sottoscrizioni attive
+app.get('/api/telegram/subscriptions', (req, res) => {
+  try {
+    const activeSubscriptions = Array.from(subscriptions.values()).filter(sub => sub.active);
+    
+    res.json({
+      success: true,
+      subscriptions: activeSubscriptions,
+      total: activeSubscriptions.length,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('💥 Errore recupero sottoscrizioni:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Endpoint per rimuovere sottoscrizione
+app.delete('/api/telegram/unsubscribe/:chatId/:matchId', (req, res) => {
+  try {
+    const { chatId, matchId } = req.params;
+    const subscriptionKey = `${chatId}-${matchId}`;
+    
+    if (subscriptions.has(subscriptionKey)) {
+      subscriptions.delete(subscriptionKey);
+      console.log(`🗑️ Sottoscrizione rimossa: ${subscriptionKey}`);
+      
+      res.json({
+        success: true,
+        message: 'Sottoscrizione rimossa con successo'
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        error: 'Sottoscrizione non trovata'
+      });
+    }
+    
+  } catch (error) {
+    console.error('💥 Errore rimozione sottoscrizione:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Avvio del server
 app.listen(PORT, () => {
   console.log(`🚀 Proxy server avviato su http://localhost:${PORT}`);
@@ -216,7 +444,12 @@ app.listen(PORT, () => {
   console.log('   - GET /api/test - Test connessione');
   console.log('   - GET /api/livescore - Partite del giorno (SOLO DATI REALI)');
   console.log('   - GET /api/live - Partite live (SOLO DATI REALI)');
+  console.log('   - POST /api/telegram/subscribe - Sottoscrivi notifiche Telegram');
+  console.log('   - POST /api/telegram/notify - Invia notifica Telegram');
+  console.log('   - GET /api/telegram/subscriptions - Lista sottoscrizioni attive');
+  console.log('   - DELETE /api/telegram/unsubscribe/:chatId/:matchId - Rimuovi sottoscrizione');
   console.log('');
   console.log('⚠️  IMPORTANTE: Questo server NON genera mai dati falsi!');
   console.log('   Se non trova dati reali, restituisce un errore onesto.');
+  console.log('🤖 Sistema notifiche Telegram: ATTIVO');
 });

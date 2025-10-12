@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/fixture.dart';
 import '../services/hybrid_football_service.dart';
 import '../services/local_notif_service.dart';
+import '../services/followed_matches_service.dart';
 import '../controllers/monitor_controller.dart';
 import '../widgets/api_key_required_widget.dart';
 
@@ -133,6 +134,63 @@ class _HomeScreenState extends State<HomeScreen> {
           ..addAll(fixtures.map((e) => e.id));
       }
     });
+  }
+
+  Future<void> _addSelectedToFollowed() async {
+    if (_selected.isEmpty) {
+      _showError('Seleziona almeno una partita da seguire');
+      return;
+    }
+
+    final followedService = FollowedMatchesService();
+    final hybridService = HybridFootballService();
+    int addedCount = 0;
+
+    try {
+      // Ottieni tutte le partite per trovare quelle selezionate
+      final allMatches = await hybridService.getFixturesToday();
+      
+      for (final fixtureId in _selected) {
+        final match = allMatches.firstWhere((m) => m.id == fixtureId);
+        final isAlreadyFollowed = await followedService.isMatchFollowed(fixtureId);
+        
+        if (!isAlreadyFollowed) {
+          await followedService.followMatch(match);
+          addedCount++;
+        }
+      }
+
+      if (mounted) {
+        if (addedCount > 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ $addedCount ${addedCount == 1 ? "partita seguita" : "partite seguite"}'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+              action: SnackBarAction(
+                label: 'Vedi',
+                textColor: Colors.white,
+                onPressed: () {
+                  Navigator.pushNamed(context, '/followed_matches');
+                },
+              ),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('ℹ️ Tutte le partite selezionate sono già seguite'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        _showError('Errore nell\'aggiungere le partite: $e');
+      }
+    }
   }
 
   Future<void> _startMonitoring() async {
@@ -288,7 +346,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Partite del giorno'),
+        title: const Text('Home'),
+        backgroundColor: Colors.green,
+        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -448,39 +508,53 @@ class _HomeScreenState extends State<HomeScreen> {
                         Container(
                           padding: const EdgeInsets.all(8.0),
                           color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                          child: Row(
+                          child: Column(
                             children: [
-                              ElevatedButton(
-                                onPressed: () => _toggleAll(fixtures),
-                                child: Text(_selected.length == fixtures.length
-                                    ? 'Deseleziona tutte'
-                                    : 'Seleziona tutte'),
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                'Selezionate: ${_selected.length}',
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              const Spacer(),
-                              if (_isMonitoring)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.green,
-                                    borderRadius: BorderRadius.circular(12),
+                              Row(
+                                children: [
+                                  ElevatedButton(
+                                    onPressed: () => _toggleAll(fixtures),
+                                    child: Text(_selected.length == fixtures.length
+                                        ? 'Deseleziona tutte'
+                                        : 'Seleziona tutte'),
                                   ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.circle, color: Colors.white, size: 12),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        'Monitoraggio attivo',
-                                        style: TextStyle(color: Colors.white, fontSize: 12),
+                                  const SizedBox(width: 8),
+                                  ElevatedButton.icon(
+                                    onPressed: _addSelectedToFollowed,
+                                    icon: const Icon(Icons.bookmark, size: 18),
+                                    label: const Text('Segui partite'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.purple,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    'Selezionate: ${_selected.length}',
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                  const Spacer(),
+                                  if (_isMonitoring)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green,
+                                        borderRadius: BorderRadius.circular(12),
                                       ),
-                                    ],
-                                  ),
-                                ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.circle, color: Colors.white, size: 12),
+                                          SizedBox(width: 4),
+                                          Text(
+                                            'Monitoraggio attivo',
+                                            style: TextStyle(color: Colors.white, fontSize: 12),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ],
                           ),
                         ),
@@ -559,13 +633,13 @@ class _HomeScreenState extends State<HomeScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           FloatingActionButton.small(
-            heroTag: 'favorite_matches',
+            heroTag: 'followed_matches',
             onPressed: () {
-              Navigator.pushNamed(context, '/favorite_matches');
+              Navigator.pushNamed(context, '/followed_matches');
             },
-            backgroundColor: Colors.pink,
-            tooltip: 'Partite Preferite',
-            child: const Icon(Icons.favorite, color: Colors.white),
+            backgroundColor: Colors.purple,
+            tooltip: 'Partite Seguite',
+            child: const Icon(Icons.bookmark, color: Colors.white),
           ),
           const SizedBox(height: 8),
           FloatingActionButton.small(
@@ -576,16 +650,6 @@ class _HomeScreenState extends State<HomeScreen> {
             backgroundColor: Colors.red,
             tooltip: 'Risultati Live',
             child: const Icon(Icons.live_tv, color: Colors.white),
-          ),
-          const SizedBox(height: 8),
-          FloatingActionButton.small(
-            heroTag: 'followed_matches',
-            onPressed: () {
-              Navigator.pushNamed(context, '/followed_matches');
-            },
-            backgroundColor: Colors.purple,
-            tooltip: 'Partite Seguite',
-            child: const Icon(Icons.bookmark, color: Colors.white),
           ),
           const SizedBox(height: 8),
           FloatingActionButton.small(

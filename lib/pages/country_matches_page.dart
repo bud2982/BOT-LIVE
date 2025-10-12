@@ -3,7 +3,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/country_matches_service.dart';
 import '../services/telegram_service.dart';
 import '../services/followed_matches_service.dart';
-import '../services/favorites_service.dart';
 import '../models/fixture.dart';
 
 class CountryMatchesPage extends StatefulWidget {
@@ -17,7 +16,6 @@ class _CountryMatchesPageState extends State<CountryMatchesPage> {
   final CountryMatchesService _countryService = CountryMatchesService();
   final TelegramService _telegramService = TelegramService();
   final FollowedMatchesService _followedService = FollowedMatchesService();
-  final FavoritesService _favoritesService = FavoritesService.instance;
   
   Map<String, List<Fixture>> _matchesByCountry = {};
   Set<int> _followedMatchIds = {};
@@ -28,19 +26,6 @@ class _CountryMatchesPageState extends State<CountryMatchesPage> {
   void initState() {
     super.initState();
     _loadMatchesByCountry();
-    _favoritesService.addListener(_onFavoritesChanged);
-  }
-
-  @override
-  void dispose() {
-    _favoritesService.removeListener(_onFavoritesChanged);
-    super.dispose();
-  }
-
-  void _onFavoritesChanged() {
-    if (mounted) {
-      setState(() {});
-    }
   }
 
   Future<void> _loadMatchesByCountry() async {
@@ -125,32 +110,7 @@ class _CountryMatchesPageState extends State<CountryMatchesPage> {
     }
   }
 
-  Future<void> _toggleFavoriteMatch(Fixture match) async {
-    final favoritesService = FavoritesService.instance;
-    final isFavorite = favoritesService.isFavorite(match.id);
-    
-    if (isFavorite) {
-      await favoritesService.removeFromFavorites(match.id);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('💔 ${match.home} vs ${match.away} rimosso dai preferiti'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-    } else {
-      await favoritesService.addToFavorites(match.id);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('⭐ ${match.home} vs ${match.away} aggiunto ai preferiti'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    }
-  }
+
 
   Future<void> _subscribeToMatch(Fixture match) async {
     // Controlla se l'utente ha configurato Telegram
@@ -256,7 +216,7 @@ class _CountryMatchesPageState extends State<CountryMatchesPage> {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
-            icon: const Icon(Icons.favorite),
+            icon: const Icon(Icons.bookmark),
             onPressed: () => Navigator.pushNamed(context, '/followed_matches'),
             tooltip: 'Partite Seguite',
           ),
@@ -433,7 +393,6 @@ class _CountryMatchesPageState extends State<CountryMatchesPage> {
   Widget _buildMatchTile(Fixture match) {
     final isFollowed = _followedMatchIds.contains(match.id);
     final isLive = match.elapsed != null;
-    final isFavorite = FavoritesService.instance.isFavorite(match.id);
         
         return ListTile(
           leading: Icon(
@@ -482,23 +441,14 @@ class _CountryMatchesPageState extends State<CountryMatchesPage> {
                 ),
               ),
               const SizedBox(width: 8),
-              // Pulsante per seguire la partita (sistema esistente)
+              // Pulsante per seguire la partita
               IconButton(
                 icon: Icon(
-                  isFollowed ? Icons.favorite : Icons.favorite_border,
-                  color: isFollowed ? Colors.red : Colors.grey,
+                  isFollowed ? Icons.bookmark : Icons.bookmark_border,
+                  color: isFollowed ? Colors.deepPurple : Colors.grey,
                 ),
                 onPressed: () => _toggleFollowMatch(match),
                 tooltip: isFollowed ? 'Non seguire più' : 'Segui partita',
-              ),
-              // Pulsante per i preferiti (nuovo sistema)
-              IconButton(
-                icon: Icon(
-                  isFavorite ? Icons.star : Icons.star_border,
-                  color: isFavorite ? Colors.amber : Colors.grey,
-                ),
-                onPressed: () => _toggleFavoriteMatch(match),
-                tooltip: isFavorite ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti',
               ),
               // Pulsante per le notifiche Telegram
               IconButton(
