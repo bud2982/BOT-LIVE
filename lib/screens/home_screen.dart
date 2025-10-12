@@ -4,11 +4,15 @@ import '../models/fixture.dart';
 import '../services/hybrid_football_service.dart';
 import '../services/local_notif_service.dart';
 import '../controllers/monitor_controller.dart';
+import '../widgets/api_key_required_widget.dart';
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
+
 class _HomeScreenState extends State<HomeScreen> {
   late Future<List<Fixture>> _future;
   final Set<int> _selected = {};
@@ -16,29 +20,37 @@ class _HomeScreenState extends State<HomeScreen> {
   int _intervalMin = 1;
   bool _isMonitoring = false;
   bool _isLoading = true;
+
   @override
   void initState() {
     super.initState();
     _init();
   }
+
   Future<void> _init() async {
     print('HomeScreen._init() chiamato');
     setState(() {
       _isLoading = true;
     });
+    
     try {
       final prefs = await SharedPreferences.getInstance();
       _intervalMin = prefs.getInt('interval_min') ?? 1;
+      
       print('Preferenze caricate: Intervallo=$_intervalMin min');
+      
       await _loadFixtures();
     } catch (e) {
       print('Errore critico durante l\'inizializzazione: $e');
       print('Stack trace: ${e.toString()}');
+      
       setState(() {
         _isLoading = false;
       });
+      
       // In caso di errore critico, prova comunque a caricare i dati
       await _loadFixtures();
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -52,53 +64,65 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoading = false;
       });
     }
+    
     print('HomeScreen._init() completato');
   }
+  
   Future<void> _loadFixtures() async {
     try {
-      print('Caricamento partite con Hybrid Football Service...');
+      print('Caricamento partite SOLO da LiveScore API...');
       final hybridService = HybridFootballService();
+      
       // Test di connessione
       final isConnected = await hybridService.testConnection();
       if (!isConnected) {
-        print('Test di connessione fallito, ma continuo comunque (il servizio ha fallback)');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Connessione limitata - Utilizzo dati di fallback'),
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
+        print('Test di connessione LiveScore API fallito');
+        throw Exception('Impossibile connettersi a LiveScore API. Verifica la configurazione della chiave API.');
       } else {
-        print('Test di connessione riuscito');
+        print('Test di connessione LiveScore API riuscito');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Connessione riuscita - Recupero dati da SofaScore'),
+              content: Text('✅ Connesso a LiveScore API - Recupero dati reali'),
               duration: Duration(seconds: 3),
+              backgroundColor: Colors.green,
             ),
           );
         }
       }
+      
       _future = hybridService.getFixturesToday();
     } catch (e) {
-      print('Errore durante il caricamento delle partite: $e');
-      print('Stack trace: ${e.toString()}');
-      // Usa il servizio comunque, ha i suoi fallback interni
-      print('Tentativo con servizio di fallback...');
-      final hybridService = HybridFootballService();
-      _future = hybridService.getFixturesToday();
+      print('Errore LiveScore API: $e');
+      
+      // Se l'errore è relativo alla chiave API, mostra il widget di configurazione
+      if (e.toString().contains('mancante') || e.toString().contains('non valida') || e.toString().contains('scaduta')) {
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => ApiKeyRequiredWidget(error: e.toString()),
+            ),
+          );
+        }
+        return;
+      }
+      
+      // Per altri errori, mostra messaggio di errore
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Errore di caricamento: $e - Utilizzo dati di fallback'),
+            content: Text('❌ Errore LiveScore API: $e'),
             duration: const Duration(seconds: 5),
+            backgroundColor: Colors.red,
           ),
         );
       }
+      
+      // Non utilizzare fallback - solo LiveScore API
+      rethrow;
     }
   }
+
   void _toggleAll(List<Fixture> fixtures) {
     setState(() {
       if (_selected.length == fixtures.length) {
@@ -110,25 +134,32 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     });
   }
+
   Future<void> _startMonitoring() async {
     print('_startMonitoring chiamato');
+    
     if (_isMonitoring) {
       _stopMonitoring();
       return;
     }
+    
     if (_selected.isEmpty) {
       print('Nessuna partita selezionata');
       _showError('Seleziona almeno una partita da monitorare');
       return;
     }
+    
     print('Partite selezionate: $_selected');
     setState(() => _isLoading = true);
+    
     try {
       final hybridService = HybridFootballService();
       final notif = LocalNotifService();
+      
       print('Inizializzazione servizio notifiche...');
       await notif.init();
       print('Servizio notifiche inizializzato');
+      
       _controller?.stop();
       _controller = MonitorController(
         api: hybridService, 
@@ -136,10 +167,13 @@ class _HomeScreenState extends State<HomeScreen> {
         selected: _selected,
         intervalMinutes: _intervalMin,
       );
+      
       print('Avvio monitoraggio...');
       await _controller!.start();
       print('Monitoraggio avviato');
+      
       setState(() => _isMonitoring = true);
+      
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -150,11 +184,14 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       print('Errore durante l\'avvio del monitoraggio: $e');
       _showError('Errore: $e');
+      
       // In caso di errore, prova comunque (il servizio ha fallback interni)
       try {
         final hybridService = HybridFootballService();
         final notif = LocalNotifService();
+        
         await notif.init();
+        
         _controller?.stop();
         _controller = MonitorController(
           api: hybridService, 
@@ -162,8 +199,10 @@ class _HomeScreenState extends State<HomeScreen> {
           selected: _selected,
           intervalMinutes: _intervalMin,
         );
+        
         await _controller!.start();
         setState(() => _isMonitoring = true);
+        
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -179,10 +218,12 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() => _isLoading = false);
     }
   }
+  
   void _stopMonitoring() {
     if (_controller != null) {
       _controller!.stop();
       setState(() => _isMonitoring = false);
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -193,6 +234,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
   }
+  
   void _showError(String message) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -204,11 +246,13 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
   }
+  
   Future<void> _refreshData() async {
     print('Aggiornamento dati...');
     setState(() {
       _isLoading = true;
     });
+    
     try {
       await _loadFixtures();
       if (mounted) {
@@ -221,8 +265,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       print('Errore durante l\'aggiornamento: $e');
-      setState(() {
-      });
+      // Errore già gestito con _showError
       _showError('Errore durante l\'aggiornamento: $e');
     } finally {
       setState(() {
@@ -230,11 +273,17 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     }
   }
+
+  // Nota: La logica di deduzione del paese dalla lega è stata spostata
+  // completamente in LiveScoreApiService per evitare duplicazioni e
+  // garantire coerenza tra backend e UI.
+
   @override
   void dispose() {
     _controller?.stop();
     super.dispose();
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -265,6 +314,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     if (snap.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
                     }
+                    
                     if (snap.hasError) {
                       return Center(
                         child: Column(
@@ -293,7 +343,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       );
                     }
+                    
                     final fixtures = snap.data ?? [];
+                    
                     if (fixtures.isEmpty) {
                       return Center(
                         child: Column(
@@ -319,8 +371,80 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       );
                     }
+                    
+                    // Raggruppa le partite per nazione
+                    print('🌍 INIZIO RAGGRUPPAMENTO: ${fixtures.length} partite da raggruppare');
+                    final Map<String, List<Fixture>> groupedFixtures = {};
+                    for (final fixture in fixtures) {
+                      // Usa direttamente il paese dal backend (LiveScoreApiService)
+                      // che ha già la logica completa di deduzione
+                      String country = fixture.country;
+                      print('   🏟️ Partita: ${fixture.home} vs ${fixture.away}');
+                      print('      League: "${fixture.league}"');
+                      print('      Paese dal backend: "$country"');
+                      
+                      // Se il backend non ha trovato un paese, usa 'International'
+                      if (country.isEmpty || 
+                          country == 'Paese Sconosciuto' || 
+                          country == 'Other' || 
+                          country == 'Unknown' ||
+                          country == 'N/A') {
+                        country = 'International';
+                        print('      ⚠️ Paese non trovato, uso International');
+                      }
+                      
+                      groupedFixtures.putIfAbsent(country, () => []).add(fixture);
+                    }
+                    
+                    // Ordina i paesi alfabeticamente, ma metti 'International' alla fine
+                    final sortedCountries = groupedFixtures.keys.toList()..sort((a, b) {
+                      if (a == 'International') return 1;
+                      if (b == 'International') return -1;
+                      return a.compareTo(b);
+                    });
+                    
+                    print('🌍 RAGGRUPPAMENTO COMPLETATO: ${sortedCountries.length} paesi trovati: $sortedCountries');
+                    
                     return Column(
                       children: [
+                        // Header informativo per raggruppamento per paesi
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12.0),
+                          margin: const EdgeInsets.all(8.0),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(8.0),
+                            border: Border.all(color: Colors.blue.shade200),
+                          ),
+                          child: Column(
+                            children: [
+                              const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.flag, color: Colors.blue),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Partite Raggruppate per Paese',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${sortedCountries.length} paesi • ${fixtures.length} partite totali',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.blue.shade700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                         Container(
                           padding: const EdgeInsets.all(8.0),
                           color: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -363,35 +487,65 @@ class _HomeScreenState extends State<HomeScreen> {
                         const Divider(height: 1),
                         Expanded(
                           child: ListView.builder(
-                            itemCount: fixtures.length,
-                            itemBuilder: (context, i) {
-                              final f = fixtures[i];
-                              final selected = _selected.contains(f.id);
+                            itemCount: sortedCountries.length,
+                            itemBuilder: (context, index) {
+                              final country = sortedCountries[index];
+                              final countryFixtures = groupedFixtures[country]!;
+                              final countrySelected = countryFixtures.where((f) => _selected.contains(f.id)).length;
+                              
                               return Card(
                                 margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                child: CheckboxListTile(
-                                  value: selected,
-                                  onChanged: (v) {
-                                    setState(() {
-                                      if (v == true) {
-                                        _selected.add(f.id);
-                                      } else {
-                                        _selected.remove(f.id);
-                                      }
-                                    });
-                                  },
+                                child: ExpansionTile(
+                                  initiallyExpanded: true, // 🎯 ESPANDI AUTOMATICAMENTE TUTTE LE SEZIONI
+                                  leading: CircleAvatar(
+                                    backgroundColor: Theme.of(context).colorScheme.primary,
+                                    child: Text(
+                                      country.substring(0, 1).toUpperCase(),
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
                                   title: Text(
-                                    '${f.home} - ${f.away}',
+                                    country,
                                     style: const TextStyle(fontWeight: FontWeight.bold),
                                   ),
-                                  subtitle: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text('Inizio: ${f.start.toString().substring(0, 16)}'),
-                                      Text('ID: ${f.id}', style: const TextStyle(fontSize: 12)),
-                                    ],
+                                  subtitle: Text(
+                                    '${countryFixtures.length} partite • $countrySelected selezionate',
+                                    style: TextStyle(
+                                      color: countrySelected > 0 ? Colors.green : null,
+                                      fontWeight: countrySelected > 0 ? FontWeight.bold : null,
+                                    ),
                                   ),
-                                  secondary: const Icon(Icons.sports_soccer),
+                                  trailing: countrySelected > 0 
+                                    ? const Icon(Icons.check_circle, color: Colors.green)
+                                    : null,
+                                  children: countryFixtures.map((f) {
+                                    final selected = _selected.contains(f.id);
+                                    return CheckboxListTile(
+                                      value: selected,
+                                      onChanged: (v) {
+                                        setState(() {
+                                          if (v == true) {
+                                            _selected.add(f.id);
+                                          } else {
+                                            _selected.remove(f.id);
+                                          }
+                                        });
+                                      },
+                                      title: Text(
+                                        '${f.home} - ${f.away}',
+                                        style: const TextStyle(fontWeight: FontWeight.bold),
+                                      ),
+                                      subtitle: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('🏆 ${f.league}'),
+                                          Text('⏰ ${f.start.toString().substring(0, 16)}'),
+                                          Text('🆔 ${f.id}', style: const TextStyle(fontSize: 12)),
+                                        ],
+                                      ),
+                                      secondary: const Icon(Icons.sports_soccer),
+                                    );
+                                  }).toList(),
                                 ),
                               );
                             },
@@ -405,13 +559,53 @@ class _HomeScreenState extends State<HomeScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           FloatingActionButton.small(
+            heroTag: 'favorite_matches',
+            onPressed: () {
+              Navigator.pushNamed(context, '/favorite_matches');
+            },
+            backgroundColor: Colors.pink,
+            tooltip: 'Partite Preferite',
+            child: const Icon(Icons.favorite, color: Colors.white),
+          ),
+          const SizedBox(height: 8),
+          FloatingActionButton.small(
+            heroTag: 'live_results',
+            onPressed: () {
+              Navigator.pushNamed(context, '/live_results');
+            },
+            backgroundColor: Colors.red,
+            tooltip: 'Risultati Live',
+            child: const Icon(Icons.live_tv, color: Colors.white),
+          ),
+          const SizedBox(height: 8),
+          FloatingActionButton.small(
+            heroTag: 'followed_matches',
+            onPressed: () {
+              Navigator.pushNamed(context, '/followed_matches');
+            },
+            backgroundColor: Colors.purple,
+            tooltip: 'Partite Seguite',
+            child: const Icon(Icons.bookmark, color: Colors.white),
+          ),
+          const SizedBox(height: 8),
+          FloatingActionButton.small(
+            heroTag: 'country_matches',
+            onPressed: () {
+              Navigator.pushNamed(context, '/country_matches');
+            },
+            backgroundColor: Colors.orange,
+            tooltip: 'Partite per Paese',
+            child: const Icon(Icons.flag, color: Colors.white),
+          ),
+          const SizedBox(height: 8),
+          FloatingActionButton.small(
             heroTag: 'live_matches',
             onPressed: () {
               Navigator.pushNamed(context, '/live_matches');
             },
             backgroundColor: Colors.blue,
             tooltip: 'Partite Live',
-            child: const Icon(Icons.sports_soccer),
+            child: const Icon(Icons.sports_soccer, color: Colors.white),
           ),
           const SizedBox(height: 10),
           FloatingActionButton(
