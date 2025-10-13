@@ -392,10 +392,61 @@ async function monitorMatches() {
         goalsHome: 0,
         goalsAway: 0,
         elapsed: 0,
-        notified: false
+        status: '',
+        notified: false,
+        notified8thMinute: false,  // Traccia notifica 8° minuto 0-0
+        notifiedHalfTime: false    // Traccia notifica fine primo tempo
       };
       
-      // Controlla se ci sono stati goal
+      // ========================================
+      // CONDIZIONE 1: MINUTO 8 CON 0-0
+      // ========================================
+      if (!previousState.notified8thMinute && 
+          match.elapsed >= 8 && 
+          match.goalsHome === 0 && 
+          match.goalsAway === 0) {
+        
+        const minute8Message = `⏱️ <b>ALERT MINUTO 8</b>\n\n` +
+          `<b>${match.home} 0-0 ${match.away}</b>\n\n` +
+          `⚠️ La partita è ancora 0-0 all'8° minuto\n` +
+          `🏆 ${match.league}\n` +
+          `🌍 ${match.country}`;
+        
+        await sendTelegramNotification(chatId, minute8Message);
+        
+        console.log(`⏱️ Alert 8° minuto 0-0 inviato per ${matchId} a chat ${chatId}`);
+        previousState.notified8thMinute = true;
+      }
+      
+      // ========================================
+      // CONDIZIONE 2: FINE PRIMO TEMPO 1-0 o 0-1
+      // ========================================
+      const isHalfTime = match.status && (
+        match.status.toUpperCase().includes('HT') || 
+        match.status.toUpperCase().includes('HALF') ||
+        match.status.toUpperCase().includes('HALFTIME')
+      );
+      
+      if (!previousState.notifiedHalfTime && 
+          isHalfTime &&
+          ((match.goalsHome === 1 && match.goalsAway === 0) || 
+           (match.goalsHome === 0 && match.goalsAway === 1))) {
+        
+        const halfTimeMessage = `🏁 <b>ALERT FINE PRIMO TEMPO</b>\n\n` +
+          `<b>${match.home} ${match.goalsHome}-${match.goalsAway} ${match.away}</b>\n\n` +
+          `⚠️ Fine primo tempo con risultato ${match.goalsHome}-${match.goalsAway}\n` +
+          `🏆 ${match.league}\n` +
+          `🌍 ${match.country}`;
+        
+        await sendTelegramNotification(chatId, halfTimeMessage);
+        
+        console.log(`🏁 Alert fine primo tempo ${match.goalsHome}-${match.goalsAway} inviato per ${matchId} a chat ${chatId}`);
+        previousState.notifiedHalfTime = true;
+      }
+      
+      // ========================================
+      // NOTIFICA GOAL (OPZIONALE - già esistente)
+      // ========================================
       const newGoals = (match.goalsHome + match.goalsAway) > (previousState.goalsHome + previousState.goalsAway);
       
       if (newGoals) {
@@ -417,7 +468,9 @@ async function monitorMatches() {
         console.log(`⚽ Goal notificato per partita ${matchId} a chat ${chatId}`);
       }
       
-      // Controlla se la partita è appena iniziata
+      // ========================================
+      // NOTIFICA INIZIO PARTITA (OPZIONALE - già esistente)
+      // ========================================
       if (!previousState.notified && match.elapsed > 0 && match.elapsed <= 5) {
         const startMessage = `🏁 <b>PARTITA INIZIATA!</b>\n\n` +
           `<b>${match.home} vs ${match.away}</b>\n` +
@@ -436,7 +489,10 @@ async function monitorMatches() {
         goalsHome: match.goalsHome,
         goalsAway: match.goalsAway,
         elapsed: match.elapsed,
-        notified: previousState.notified
+        status: match.status || '',
+        notified: previousState.notified,
+        notified8thMinute: previousState.notified8thMinute,
+        notifiedHalfTime: previousState.notifiedHalfTime
       });
     }
     
@@ -483,6 +539,13 @@ app.listen(PORT, () => {
   console.log('');
   console.log('⚠️  IMPORTANTE: Questo server NON genera mai dati falsi!');
   console.log('   Se non trova dati reali, restituisce un errore onesto.');
+  console.log('');
   console.log('🤖 Sistema notifiche Telegram: ATTIVO');
   console.log('🔔 Monitoraggio automatico: ATTIVO (ogni 30 secondi)');
+  console.log('');
+  console.log('📢 NOTIFICHE CONFIGURATE:');
+  console.log('   ⏱️  Alert 8° minuto con 0-0');
+  console.log('   🏁 Alert fine primo tempo con 1-0 o 0-1');
+  console.log('   ⚽ Notifica goal in tempo reale');
+  console.log('   🏁 Notifica inizio partita');
 });
