@@ -208,16 +208,34 @@ class FootballScraperToday {
               matchTime = match.fixture_time.substring(0, 5);
             }
             
+            // Estrai i punteggi - supporta sia oggetti che stringhe
+            let homeScore = '0';
+            let awayScore = '0';
+            
+            if (match.score && typeof match.score === 'string') {
+              // Formato stringa: "3 - 1"
+              const scoreParts = match.score.split('-').map(s => s.trim());
+              if (scoreParts.length === 2) {
+                homeScore = scoreParts[0] || '0';
+                awayScore = scoreParts[1] || '0';
+              }
+            } else if (match.home?.goals !== undefined || match.home_goals !== undefined) {
+              // Formato oggetto
+              homeScore = String(match.home?.goals || match.home_goals || '0');
+              awayScore = String(match.away?.goals || match.away_goals || '0');
+            }
+            
             const parsedMatch = {
               home: match.home?.name || match.home_name || 'Team A',
               away: match.away?.name || match.away_name || 'Team B',
-              homeScore: match.home?.goals || match.home_goals || '0',
-              awayScore: match.away?.goals || match.away_goals || '0',
+              homeScore: homeScore,
+              awayScore: awayScore,
               status: match.status || match.time || 'LIVE',
-              league: match.league?.name || match.competition?.name || 'Unknown League',
+              league: match.league?.name || match.competition?.name || match.competition_name || 'Unknown League',
               time: matchTime,
               country: match.country?.name || match.league?.country || '',
-              date: matchDate
+              date: matchDate,
+              elapsed: match.elapsed || null
             };
             
             // Debug: stampa i primi 2 match parsati
@@ -492,21 +510,46 @@ class FootballScraperToday {
       console.log(`🎉 TOTALE: ${uniqueMatches.length} partite uniche trovate da ${successfulSources.length} fonti!`);
       console.log(`📊 Fonti di successo: ${successfulSources.join(', ')}`);
       
-      // Aggiungi informazioni sulla nazione basate sulla lega
-      const matchesWithCountry = uniqueMatches.map(match => ({
-        ...match,
-        country: this.getCountryFromLeague(match.league)
-      }));
+      // Trasforma i dati nel formato atteso dal proxy
+      const transformedMatches = uniqueMatches.map(match => {
+        // Combina date e time per creare il timestamp ISO completo
+        let startTimestamp;
+        if (match.date && match.time) {
+          // Formato: "2025-10-13" + "15:30" -> "2025-10-13T15:30:00.000Z"
+          startTimestamp = new Date(`${match.date}T${match.time}:00`).toISOString();
+        } else if (match.date) {
+          startTimestamp = new Date(`${match.date}T00:00:00`).toISOString();
+        } else {
+          startTimestamp = new Date().toISOString();
+        }
+        
+        return {
+          home: match.home,
+          away: match.away,
+          goalsHome: parseInt(match.homeScore) || 0,  // Converti homeScore -> goalsHome
+          goalsAway: parseInt(match.awayScore) || 0,  // Converti awayScore -> goalsAway
+          start: startTimestamp,                       // Aggiungi campo start (timestamp ISO)
+          elapsed: match.elapsed || null,
+          status: match.status,
+          league: match.league,
+          country: match.country || this.getCountryFromLeague(match.league)
+        };
+      });
+      
+      console.log(`✅ Trasformate ${transformedMatches.length} partite nel formato corretto`);
+      if (transformedMatches.length > 0) {
+        console.log(`🔍 Esempio partita trasformata: ${transformedMatches[0].home} vs ${transformedMatches[0].away}, start: ${transformedMatches[0].start}`);
+      }
       
       return {
         success: true,
-        matches: matchesWithCountry, // RIMOSSO IL LIMITE - TUTTE LE PARTITE
+        matches: transformedMatches, // TUTTE LE PARTITE nel formato corretto
         source: `multi-source: ${successfulSources.join(', ')}`,
         sources_successful: successfulSources.length,
         sources_total: this.sources.length,
         timestamp: new Date().toISOString(),
         date: new Date().toISOString().split('T')[0],
-        total_matches: matchesWithCountry.length
+        total_matches: transformedMatches.length
       };
     }
     

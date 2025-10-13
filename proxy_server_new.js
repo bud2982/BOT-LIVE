@@ -1,8 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-const FootballScraperV2 = require('./football_scraper_v2');
-const FootballScraperRSS = require('./football_scraper');
 const FootballScraperToday = require('./football_scraper_today');
 
 const app = express();
@@ -21,178 +19,53 @@ app.get('/api/test', (req, res) => {
   });
 });
 
-// Funzione per combinare risultati da più scraper
+// Funzione per ottenere partite di oggi - SOLO LIVESCORE API
 async function getTodayMatches() {
-  console.log('🔄 Ricerca partite del giorno da fonti multiple...');
+  console.log('🔄 Ricerca partite del giorno da LiveScore API...');
   
-  const scrapers = [
-    { name: 'TODAY-SPECIALIZED', instance: new FootballScraperToday() },
-    { name: 'API-V2', instance: new FootballScraperV2() },
-    { name: 'RSS', instance: new FootballScraperRSS() }
-  ];
-  
-  let allMatches = [];
-  let successfulSources = [];
-  
-  for (const scraper of scrapers) {
-    try {
-      console.log(`🌐 Tentativo con ${scraper.name}...`);
-      const result = await scraper.instance.getMatches();
+  try {
+    const scraper = new FootballScraperToday();
+    const result = await scraper.getMatches();
+    
+    if (result.success && result.matches && result.matches.length > 0) {
+      console.log(`✅ LiveScore API: ${result.matches.length} partite trovate`);
       
-      if (result.success && result.matches && result.matches.length > 0) {
-        console.log(`✅ ${scraper.name}: ${result.matches.length} partite trovate`);
-        
-        // Filtra partite di oggi
-        const today = new Date().toISOString().split('T')[0];
-        const todayMatches = result.matches.filter(match => {
-          if (!match.start) return false;
-          const matchDate = new Date(match.start).toISOString().split('T')[0];
-          return matchDate === today;
-        });
-        
-        if (todayMatches.length > 0) {
-          allMatches = allMatches.concat(todayMatches);
-          successfulSources.push(`${result.source} (${todayMatches.length} partite)`);
-        }
+      // Filtra partite di oggi
+      const today = new Date().toISOString().split('T')[0];
+      const todayMatches = result.matches.filter(match => {
+        if (!match.start) return false;
+        const matchDate = new Date(match.start).toISOString().split('T')[0];
+        return matchDate === today;
+      });
+      
+      if (todayMatches.length > 0) {
+        console.log(`✅ Trovate ${todayMatches.length} partite di oggi da LiveScore API`);
+        return {
+          success: true,
+          matches: todayMatches, // TUTTE le partite, senza limite
+          source: result.source,
+          timestamp: new Date().toISOString(),
+          total_found: todayMatches.length
+        };
       }
-    } catch (error) {
-      console.log(`❌ Errore ${scraper.name}: ${error.message}`);
     }
-  }
-  
-  // Rimuovi duplicati basandosi su home + away
-  const uniqueMatches = [];
-  const seen = new Set();
-  
-  for (const match of allMatches) {
-    const key = `${match.home}-${match.away}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      uniqueMatches.push(match);
-    }
-  }
-  
-  // TEMPORANEO: Forza l'uso dei dati di test per verificare il raggruppamento
-  console.log('🧪 FORZANDO DATI DI TEST per verificare raggruppamento per paese');
-  
-  // Funzione helper per creare date con orari specifici
-  const createMatchDate = (hoursFromNow, minutes = 0) => {
-    const date = new Date();
-    date.setHours(date.getHours() + hoursFromNow);
-    date.setMinutes(minutes);
-    date.setSeconds(0);
-    date.setMilliseconds(0);
-    return date.toISOString();
-  };
-  
-  const testMatches = [
-    {
-      id: 1,
-      home: 'Juventus',
-      away: 'Milan',
-      goalsHome: 2,
-      goalsAway: 1,
-      start: createMatchDate(2, 30), // Tra 2 ore e 30 minuti
-      elapsed: null,
-      league: 'Serie A',
-      country: 'Italy'
-    },
-    {
-      id: 2,
-      home: 'Barcelona',
-      away: 'Real Madrid',
-      goalsHome: 1,
-      goalsAway: 3,
-      start: createMatchDate(1, 0), // Tra 1 ora
-      elapsed: null,
-      league: 'La Liga',
-      country: 'Spain'
-    },
-    {
-      id: 3,
-      home: 'Manchester United',
-      away: 'Liverpool',
-      goalsHome: 0,
-      goalsAway: 2,
-      start: createMatchDate(3, 15), // Tra 3 ore e 15 minuti
-      elapsed: null,
-      league: 'Premier League',
-      country: 'England'
-    },
-    {
-      id: 4,
-      home: 'Bayern Munich',
-      away: 'Borussia Dortmund',
-      goalsHome: 3,
-      goalsAway: 1,
-      start: createMatchDate(0, 45), // Tra 45 minuti
-      elapsed: null,
-      league: 'Bundesliga',
-      country: 'Germany'
-    },
-    {
-      id: 5,
-      home: 'PSG',
-      away: 'Marseille',
-      goalsHome: 2,
-      goalsAway: 0,
-      start: createMatchDate(4, 0), // Tra 4 ore
-      elapsed: null,
-      league: 'Ligue 1',
-      country: 'France'
-    },
-    {
-      id: 6,
-      home: 'Inter',
-      away: 'Napoli',
-      goalsHome: 1,
-      goalsAway: 1,
-      start: createMatchDate(2, 0), // Tra 2 ore
-      elapsed: null,
-      league: 'Serie A',
-      country: 'Italy'
-    },
-    {
-      id: 7,
-      home: 'Team A',
-      away: 'Team B',
-      goalsHome: 0,
-      goalsAway: 0,
-      start: createMatchDate(5, 30), // Tra 5 ore e 30 minuti
-      elapsed: null,
-      league: 'Various',
-      country: 'Other'
-    }
-  ];
-  
-  return {
-    success: true,
-    matches: testMatches,
-    source: 'test-data-for-grouping',
-    timestamp: new Date().toISOString(),
-    total_found: testMatches.length,
-    note: 'DATI DI TEST - per verificare raggruppamento per paese'
-  };
-
-  // CODICE ORIGINALE COMMENTATO TEMPORANEAMENTE
-  /*
-  if (uniqueMatches.length > 0) {
+    
     return {
-      success: true,
-      matches: uniqueMatches.slice(0, 20), // Massimo 20 partite
-      source: successfulSources.join(', '),
-      timestamp: new Date().toISOString(),
-      total_found: uniqueMatches.length
+      success: false,
+      error: 'Nessuna partita di oggi trovata',
+      message: 'Non sono state trovate partite per la data odierna da LiveScore API.',
+      timestamp: new Date().toISOString()
+    };
+    
+  } catch (error) {
+    console.log(`❌ Errore LiveScore API: ${error.message}`);
+    return {
+      success: false,
+      error: error.message,
+      message: 'Errore durante il recupero delle partite da LiveScore API.',
+      timestamp: new Date().toISOString()
     };
   }
-  */
-  
-  return {
-    success: false,
-    error: 'Nessuna partita di oggi trovata',
-    message: 'Non sono state trovate partite per la data odierna dalle fonti disponibili. Nessun dato finto generato.',
-    timestamp: new Date().toISOString()
-  };
 }
 
 // Endpoint per recuperare partite - SOLO DATI REALI
@@ -219,76 +92,55 @@ app.get('/api/livescore', async (req, res) => {
   }
 });
 
-// Funzione per ottenere partite live
+// Funzione per ottenere partite live - SOLO LIVESCORE API
 async function getLiveMatches() {
-  console.log('🔴 Ricerca partite LIVE da fonti multiple...');
+  console.log('🔴 Ricerca partite LIVE da LiveScore API...');
   
-  const scrapers = [
-    { name: 'TODAY-SPECIALIZED', instance: new FootballScraperToday() },
-    { name: 'API-V2', instance: new FootballScraperV2() },
-    { name: 'RSS', instance: new FootballScraperRSS() }
-  ];
-  
-  let allMatches = [];
-  let successfulSources = [];
-  
-  for (const scraper of scrapers) {
-    try {
-      console.log(`🌐 Tentativo LIVE con ${scraper.name}...`);
-      const result = await scraper.instance.getMatches();
+  try {
+    const scraper = new FootballScraperToday();
+    const result = await scraper.getMatches();
+    
+    if (result.success && result.matches && result.matches.length > 0) {
+      // Filtra solo partite in corso (con elapsed time o status specifici)
+      const liveMatches = result.matches.filter(match => {
+        return match.elapsed !== null && match.elapsed !== undefined ||
+               (match.status && (
+                 match.status.includes('LIVE') || 
+                 match.status.includes('IN_PLAY') || 
+                 match.status.includes('1H') || 
+                 match.status.includes('2H') ||
+                 match.status.includes('HT')
+               ));
+      });
       
-      if (result.success && result.matches && result.matches.length > 0) {
-        // Filtra solo partite in corso (con elapsed time o status specifici)
-        const liveMatches = result.matches.filter(match => {
-          return match.elapsed !== null && match.elapsed !== undefined ||
-                 (match.status && (
-                   match.status.includes('LIVE') || 
-                   match.status.includes('IN_PLAY') || 
-                   match.status.includes('1H') || 
-                   match.status.includes('2H') ||
-                   match.status.includes('HT')
-                 ));
-        });
-        
-        if (liveMatches.length > 0) {
-          console.log(`🔴 ${scraper.name}: ${liveMatches.length} partite LIVE trovate`);
-          allMatches = allMatches.concat(liveMatches);
-          successfulSources.push(`${result.source} (${liveMatches.length} live)`);
-        }
+      if (liveMatches.length > 0) {
+        console.log(`🔴 LiveScore API: ${liveMatches.length} partite LIVE trovate`);
+        return {
+          success: true,
+          matches: liveMatches, // TUTTE le partite live, senza limite
+          source: result.source,
+          timestamp: new Date().toISOString(),
+          total_live: liveMatches.length
+        };
       }
-    } catch (error) {
-      console.log(`❌ Errore LIVE ${scraper.name}: ${error.message}`);
     }
-  }
-  
-  // Rimuovi duplicati
-  const uniqueMatches = [];
-  const seen = new Set();
-  
-  for (const match of allMatches) {
-    const key = `${match.home}-${match.away}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      uniqueMatches.push(match);
-    }
-  }
-  
-  if (uniqueMatches.length > 0) {
+    
     return {
-      success: true,
-      matches: uniqueMatches.slice(0, 10), // Massimo 10 partite live
-      source: successfulSources.join(', ').replace(/real-/g, 'live-'),
-      timestamp: new Date().toISOString(),
-      total_live: uniqueMatches.length
+      success: false,
+      error: 'Nessuna partita live trovata',
+      message: 'Non ci sono partite in corso al momento da LiveScore API.',
+      timestamp: new Date().toISOString()
+    };
+    
+  } catch (error) {
+    console.log(`❌ Errore LiveScore API (live): ${error.message}`);
+    return {
+      success: false,
+      error: error.message,
+      message: 'Errore durante il recupero delle partite live da LiveScore API.',
+      timestamp: new Date().toISOString()
     };
   }
-  
-  return {
-    success: false,
-    error: 'Nessuna partita live trovata',
-    message: 'Non ci sono partite in corso al momento. Nessun dato finto generato.',
-    timestamp: new Date().toISOString()
-  };
 }
 
 // Endpoint per partite live - SOLO DATI REALI
