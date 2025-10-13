@@ -48,25 +48,21 @@ class TestProxyService {
       if (data['success'] == true && data['matches'] != null) {
         final matches = data['matches'] as List<dynamic>;
         
+        print('TestProxyService: Parsing ${matches.length} partite...');
+        
         for (final match in matches) {
           try {
-            final fixture = Fixture(
-              id: match['id'] ?? 0,
-              home: match['home'] ?? 'Team Casa',
-              away: match['away'] ?? 'Team Ospite',
-              goalsHome: match['goalsHome'] ?? 0,
-              goalsAway: match['goalsAway'] ?? 0,
-              start: DateTime.tryParse(match['start'] ?? '') ?? DateTime.now(),
-              elapsed: match['elapsed'],
-              league: match['league'] ?? 'Lega Sconosciuta',
-              country: match['country'] ?? 'Other',
-            );
+            // Usa Fixture.fromJson per parsing consistente
+            final fixture = Fixture.fromJson(match);
             fixtures.add(fixture);
           } catch (e) {
             print('TestProxyService: Errore parsing singola partita: $e');
+            print('TestProxyService: Match problematico: $match');
             continue;
           }
         }
+        
+        print('TestProxyService: Parsing completato - ${fixtures.length} partite valide');
       }
       
       return fixtures;

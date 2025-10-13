@@ -76,6 +76,9 @@ class Fixture {
     DateTime start;
     try {
       final dateStr = j['start'] as String?;
+      print('🔍 DEBUG Fixture - Parsing start time for $home vs $away');
+      print('🔍 DEBUG Fixture - Raw start string: "$dateStr"');
+      
       if (dateStr != null && dateStr.isNotEmpty) {
         // Gestisci formati di data problematici
         String cleanDateStr = dateStr;
@@ -84,11 +87,18 @@ class Fixture {
         } else if (dateStr.contains('FT:00Z')) {
           cleanDateStr = dateStr.replaceAll('FT:00Z', '15:00:00Z');
         }
-        start = DateTime.parse(cleanDateStr);
+        // Parse come UTC e converti in ora locale
+        final utcDateTime = DateTime.parse(cleanDateStr);
+        start = utcDateTime.toLocal();
+        print('🔍 DEBUG Fixture - Parsed DateTime UTC: $utcDateTime');
+        print('🔍 DEBUG Fixture - Converted to Local: $start');
+        print('🔍 DEBUG Fixture - Local Hour: ${start.hour}, Minute: ${start.minute}');
       } else {
+        print('🔍 DEBUG Fixture - Empty start string, using DateTime.now()');
         start = DateTime.now();
       }
-    } catch (_) {
+    } catch (e) {
+      print('🔍 DEBUG Fixture - Error parsing start time: $e');
       start = DateTime.now();
     }
 

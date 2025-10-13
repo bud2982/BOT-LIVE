@@ -27,6 +27,16 @@ class LiveScoreService {
           print('LiveScoreService: Trovate ${matchesJson.length} partite da LiveScore');
           print('LiveScoreService: Fonte: ${data['source']}');
           
+          // Debug: stampa i primi 2 match per vedere i dati grezzi
+          if (matchesJson.isNotEmpty) {
+            print('🔍 DEBUG LiveScoreService - Primo match JSON:');
+            print(json.encode(matchesJson[0]));
+            if (matchesJson.length > 1) {
+              print('🔍 DEBUG LiveScoreService - Secondo match JSON:');
+              print(json.encode(matchesJson[1]));
+            }
+          }
+          
           final fixtures = matchesJson.map((json) => Fixture.fromJson(json)).toList();
           print('LiveScoreService: Convertite ${fixtures.length} partite in oggetti Fixture');
           return fixtures;

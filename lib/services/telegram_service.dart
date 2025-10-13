@@ -58,6 +58,17 @@ class TelegramService {
   }) async {
     try {
       print('📤 Invio notifica Telegram...');
+      print('   Chat ID: $chatId');
+      print('   Match ID: $matchId');
+      print('   Messaggio (primi 100 caratteri): ${message.substring(0, message.length > 100 ? 100 : message.length)}');
+      
+      final requestBody = {
+        'chatId': chatId,
+        'message': message,
+        if (matchId != null) 'matchId': matchId,
+      };
+      
+      print('   Body della richiesta: ${json.encode(requestBody)}');
       
       final response = await http.post(
         Uri.parse('$baseUrl/api/telegram/notify'),
@@ -65,26 +76,30 @@ class TelegramService {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: json.encode({
-          'chatId': chatId,
-          'message': message,
-          'matchId': matchId,
-        }),
+        body: json.encode(requestBody),
       ).timeout(const Duration(seconds: 10));
+
+      print('   Status code risposta: ${response.statusCode}');
+      print('   Body risposta: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['success'] == true) {
           print('✅ Notifica inviata con successo');
           return true;
+        } else {
+          print('❌ Risposta negativa dal server: ${data['error']}');
+          return false;
         }
       }
       
       print('❌ Errore nell\'invio notifica: ${response.statusCode}');
+      print('   Dettagli: ${response.body}');
       return false;
       
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('💥 Errore TelegramService notify: $e');
+      print('   Stack trace: $stackTrace');
       return false;
     }
   }

@@ -172,14 +172,29 @@ app.get('/api/livescore', async (req, res) => {
       
       // Converti il formato per compatibilità con l'app Flutter
       const formattedMatches = result.matches.map((match, index) => {
+        // Debug: stampa i primi 2 match per vedere date e orari
+        if (index < 2) {
+          console.log(`🔍 DEBUG Match ${index + 1}: ${match.home} vs ${match.away}`);
+          console.log(`🔍 DEBUG - date: "${match.date}", time: "${match.time}"`);
+        }
+        
         // Correggi il formato della data
         let startDate;
         if (match.date && match.time) {
           startDate = `${match.date}T${match.time}:00Z`;
+          if (index < 2) {
+            console.log(`🔍 DEBUG - startDate costruito: "${startDate}"`);
+          }
         } else if (match.date) {
           startDate = `${match.date}T15:00:00Z`;
+          if (index < 2) {
+            console.log(`🔍 DEBUG - startDate con ora default: "${startDate}"`);
+          }
         } else {
           startDate = new Date().toISOString();
+          if (index < 2) {
+            console.log(`🔍 DEBUG - startDate con data corrente: "${startDate}"`);
+          }
         }
         
         const league = match.league || 'Unknown League';

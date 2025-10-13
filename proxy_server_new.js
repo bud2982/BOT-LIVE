@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const axios = require('axios');
 const FootballScraperV2 = require('./football_scraper_v2');
 const FootballScraperRSS = require('./football_scraper');
 const FootballScraperToday = require('./football_scraper_today');
@@ -74,6 +75,16 @@ async function getTodayMatches() {
   // TEMPORANEO: Forza l'uso dei dati di test per verificare il raggruppamento
   console.log('🧪 FORZANDO DATI DI TEST per verificare raggruppamento per paese');
   
+  // Funzione helper per creare date con orari specifici
+  const createMatchDate = (hoursFromNow, minutes = 0) => {
+    const date = new Date();
+    date.setHours(date.getHours() + hoursFromNow);
+    date.setMinutes(minutes);
+    date.setSeconds(0);
+    date.setMilliseconds(0);
+    return date.toISOString();
+  };
+  
   const testMatches = [
     {
       id: 1,
@@ -81,7 +92,7 @@ async function getTodayMatches() {
       away: 'Milan',
       goalsHome: 2,
       goalsAway: 1,
-      start: new Date().toISOString(),
+      start: createMatchDate(2, 30), // Tra 2 ore e 30 minuti
       elapsed: null,
       league: 'Serie A',
       country: 'Italy'
@@ -92,7 +103,7 @@ async function getTodayMatches() {
       away: 'Real Madrid',
       goalsHome: 1,
       goalsAway: 3,
-      start: new Date().toISOString(),
+      start: createMatchDate(1, 0), // Tra 1 ora
       elapsed: null,
       league: 'La Liga',
       country: 'Spain'
@@ -103,7 +114,7 @@ async function getTodayMatches() {
       away: 'Liverpool',
       goalsHome: 0,
       goalsAway: 2,
-      start: new Date().toISOString(),
+      start: createMatchDate(3, 15), // Tra 3 ore e 15 minuti
       elapsed: null,
       league: 'Premier League',
       country: 'England'
@@ -114,7 +125,7 @@ async function getTodayMatches() {
       away: 'Borussia Dortmund',
       goalsHome: 3,
       goalsAway: 1,
-      start: new Date().toISOString(),
+      start: createMatchDate(0, 45), // Tra 45 minuti
       elapsed: null,
       league: 'Bundesliga',
       country: 'Germany'
@@ -125,7 +136,7 @@ async function getTodayMatches() {
       away: 'Marseille',
       goalsHome: 2,
       goalsAway: 0,
-      start: new Date().toISOString(),
+      start: createMatchDate(4, 0), // Tra 4 ore
       elapsed: null,
       league: 'Ligue 1',
       country: 'France'
@@ -136,7 +147,7 @@ async function getTodayMatches() {
       away: 'Napoli',
       goalsHome: 1,
       goalsAway: 1,
-      start: new Date().toISOString(),
+      start: createMatchDate(2, 0), // Tra 2 ore
       elapsed: null,
       league: 'Serie A',
       country: 'Italy'
@@ -147,9 +158,10 @@ async function getTodayMatches() {
       away: 'Team B',
       goalsHome: 0,
       goalsAway: 0,
-      start: new Date().toISOString(),
+      start: createMatchDate(5, 30), // Tra 5 ore e 30 minuti
       elapsed: null,
-      league: 'Various'
+      league: 'Various',
+      country: 'Other'
     }
   ];
   
@@ -352,36 +364,88 @@ app.post('/api/telegram/subscribe', (req, res) => {
 });
 
 // Endpoint per inviare notifica Telegram
-app.post('/api/telegram/notify', (req, res) => {
+app.post('/api/telegram/notify', async (req, res) => {
   try {
-    const { chatId, message, matchId } = req.body;
+    const { chatId, message, matchId, botToken } = req.body;
+    
+    console.log('📥 Richiesta notifica Telegram ricevuta');
+    console.log('   Body ricevuto:', JSON.stringify(req.body, null, 2));
     
     if (!chatId || !message) {
+      console.log('❌ Parametri mancanti!');
+      console.log('   chatId:', chatId);
+      console.log('   message:', message ? 'presente' : 'mancante');
       return res.status(400).json({
         success: false,
         error: 'Parametri mancanti: chatId e message richiesti'
       });
     }
     
-    console.log(`🤖 Invio notifica Telegram a chat ${chatId}:`);
-    console.log(`   Messaggio: ${message}`);
+    // Bot Token predefinito (token reale del bot)
+    const defaultBotToken = '8298427630:AAFIwMJNq2qcdblAd0WNvt4J5QHK_-IgfJo';
+    const telegramBotToken = botToken || defaultBotToken;
+    
+    console.log(`📤 Invio notifica Telegram a chat ${chatId}...`);
+    console.log(`   Messaggio (primi 100 caratteri): ${message.substring(0, 100)}...`);
     if (matchId) console.log(`   Partita ID: ${matchId}`);
+    console.log(`   Bot Token: ${telegramBotToken.substring(0, 10)}...`);
     
-    // Simula l'invio della notifica (in produzione integrare con Bot Telegram)
-    // Qui dovresti integrare con l'API di Telegram Bot
+    // Invia il messaggio tramite API Telegram
+    const telegramApiUrl = `https://api.telegram.org/bot${telegramBotToken}/sendMessage`;
+    console.log(`   URL Telegram: ${telegramApiUrl.substring(0, 50)}...`);
     
-    res.json({
-      success: true,
-      message: 'Notifica inviata con successo',
-      chatId,
-      sentAt: new Date().toISOString()
+    const telegramResponse = await axios.post(telegramApiUrl, {
+      chat_id: chatId,
+      text: message,
+      parse_mode: 'HTML'
+    }, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 10000
     });
+    
+    console.log('   Risposta Telegram ricevuta:', JSON.stringify(telegramResponse.data, null, 2));
+    
+    if (telegramResponse.data.ok) {
+      console.log(`✅ Notifica Telegram inviata con successo a chat ${chatId}`);
+      res.json({
+        success: true,
+        message: 'Notifica inviata con successo',
+        chatId: chatId,
+        messageId: telegramResponse.data.result.message_id,
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      console.log(`❌ Errore API Telegram: ${telegramResponse.data.description}`);
+      res.status(400).json({
+        success: false,
+        error: `Errore Telegram: ${telegramResponse.data.description}`,
+        errorCode: telegramResponse.data.error_code
+      });
+    }
     
   } catch (error) {
     console.error('💥 Errore invio notifica Telegram:', error.message);
+    console.error('   Stack trace:', error.stack);
+    
+    // Dettagli aggiuntivi per debug
+    if (error.response) {
+      console.error('   Status:', error.response.status);
+      console.error('   Data:', JSON.stringify(error.response.data, null, 2));
+      console.error('   Headers:', JSON.stringify(error.response.headers, null, 2));
+    } else if (error.request) {
+      console.error('   Nessuna risposta ricevuta dal server Telegram');
+      console.error('   Request:', error.request);
+    } else {
+      console.error('   Errore nella configurazione della richiesta:', error.message);
+    }
+    
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message,
+      details: error.response?.data || 'Nessun dettaglio disponibile',
+      type: error.response ? 'response_error' : (error.request ? 'no_response' : 'config_error')
     });
   }
 });
@@ -437,6 +501,122 @@ app.delete('/api/telegram/unsubscribe/:chatId/:matchId', (req, res) => {
   }
 });
 
+// ========================================
+// SISTEMA DI MONITORAGGIO AUTOMATICO
+// ========================================
+
+// Storage per tracciare lo stato delle partite
+const matchStates = new Map();
+
+// Funzione per monitorare le partite e inviare notifiche
+async function monitorMatches() {
+  if (subscriptions.size === 0) {
+    return; // Nessuna sottoscrizione attiva
+  }
+  
+  console.log(`🔍 Monitoraggio ${subscriptions.size} sottoscrizioni attive...`);
+  
+  try {
+    // Ottieni le partite live
+    const liveResult = await getLiveMatches();
+    
+    if (!liveResult.success || !liveResult.matches) {
+      return;
+    }
+    
+    // Per ogni sottoscrizione attiva
+    for (const [key, subscription] of subscriptions.entries()) {
+      const { chatId, matchId, matchInfo } = subscription;
+      
+      // Trova la partita corrispondente
+      const match = liveResult.matches.find(m => m.id === matchId);
+      
+      if (!match) {
+        continue; // Partita non trovata nei dati live
+      }
+      
+      // Ottieni lo stato precedente della partita
+      const previousState = matchStates.get(matchId) || {
+        goalsHome: 0,
+        goalsAway: 0,
+        elapsed: 0,
+        notified: false
+      };
+      
+      // Controlla se ci sono stati goal
+      const newGoals = (match.goalsHome + match.goalsAway) > (previousState.goalsHome + previousState.goalsAway);
+      
+      if (newGoals) {
+        // Determina chi ha segnato
+        let goalMessage = '';
+        if (match.goalsHome > previousState.goalsHome) {
+          goalMessage = `⚽ <b>GOOOOOL!</b>\n\n<b>${match.home}</b> ha segnato!\n\n`;
+        } else if (match.goalsAway > previousState.goalsAway) {
+          goalMessage = `⚽ <b>GOOOOOL!</b>\n\n<b>${match.away}</b> ha segnato!\n\n`;
+        }
+        
+        goalMessage += `<b>${match.home} ${match.goalsHome} - ${match.goalsAway} ${match.away}</b>\n`;
+        goalMessage += `🏆 ${match.league}\n`;
+        goalMessage += `⏱️ ${match.elapsed}'`;
+        
+        // Invia notifica
+        await sendTelegramNotification(chatId, goalMessage);
+        
+        console.log(`⚽ Goal notificato per partita ${matchId} a chat ${chatId}`);
+      }
+      
+      // Controlla se la partita è appena iniziata
+      if (!previousState.notified && match.elapsed > 0 && match.elapsed <= 5) {
+        const startMessage = `🏁 <b>PARTITA INIZIATA!</b>\n\n` +
+          `<b>${match.home} vs ${match.away}</b>\n` +
+          `🏆 ${match.league}\n` +
+          `🌍 ${match.country}\n\n` +
+          `Segui la partita in diretta! ⚽`;
+        
+        await sendTelegramNotification(chatId, startMessage);
+        
+        console.log(`🏁 Inizio partita notificato per ${matchId} a chat ${chatId}`);
+        previousState.notified = true;
+      }
+      
+      // Aggiorna lo stato della partita
+      matchStates.set(matchId, {
+        goalsHome: match.goalsHome,
+        goalsAway: match.goalsAway,
+        elapsed: match.elapsed,
+        notified: previousState.notified
+      });
+    }
+    
+  } catch (error) {
+    console.error('💥 Errore nel monitoraggio:', error.message);
+  }
+}
+
+// Funzione helper per inviare notifiche Telegram
+async function sendTelegramNotification(chatId, message) {
+  try {
+    const defaultBotToken = '8298427630:AAFIwMJNq2qcdblAd0WNvt4J5QHK_-IgfJo';
+    const telegramApiUrl = `https://api.telegram.org/bot${defaultBotToken}/sendMessage`;
+    
+    await axios.post(telegramApiUrl, {
+      chat_id: chatId,
+      text: message,
+      parse_mode: 'HTML'
+    }, {
+      timeout: 10000
+    });
+    
+    return true;
+  } catch (error) {
+    console.error(`❌ Errore invio notifica a ${chatId}:`, error.message);
+    return false;
+  }
+}
+
+// Avvia il monitoraggio ogni 30 secondi
+setInterval(monitorMatches, 30000);
+
 // Avvio del server
 app.listen(PORT, () => {
   console.log(`🚀 Proxy server avviato su http://localhost:${PORT}`);
@@ -452,4 +632,5 @@ app.listen(PORT, () => {
   console.log('⚠️  IMPORTANTE: Questo server NON genera mai dati falsi!');
   console.log('   Se non trova dati reali, restituisce un errore onesto.');
   console.log('🤖 Sistema notifiche Telegram: ATTIVO');
+  console.log('🔔 Monitoraggio automatico: ATTIVO (ogni 30 secondi)');
 });

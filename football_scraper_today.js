@@ -181,6 +181,33 @@ class FootballScraperToday {
       if (Array.isArray(matchesData)) {
         for (const match of matchesData) {
           try {
+            // Estrai data e ora dalla risposta API
+            let matchDate = new Date().toISOString().split('T')[0]; // Default: oggi
+            let matchTime = '00:00'; // Default: mezzanotte
+            
+            // Prova a estrarre la data dall'API
+            if (match.date) {
+              matchDate = match.date;
+            } else if (match.added) {
+              // Campo 'added' contiene timestamp completo (es: "2024-01-15 15:30:00")
+              matchDate = match.added.split(' ')[0];
+              matchTime = match.added.split(' ')[1]?.substring(0, 5) || '00:00';
+            } else if (match.location) {
+              // Alcuni endpoint usano 'location' per timestamp
+              const locationDate = new Date(match.location);
+              if (!isNaN(locationDate.getTime())) {
+                matchDate = locationDate.toISOString().split('T')[0];
+                matchTime = locationDate.toISOString().split('T')[1].substring(0, 5);
+              }
+            }
+            
+            // Prova a estrarre l'ora dall'API
+            if (match.time && match.time.includes(':')) {
+              matchTime = match.time.substring(0, 5);
+            } else if (match.fixture_time) {
+              matchTime = match.fixture_time.substring(0, 5);
+            }
+            
             const parsedMatch = {
               home: match.home?.name || match.home_name || 'Team A',
               away: match.away?.name || match.away_name || 'Team B',
@@ -188,10 +215,19 @@ class FootballScraperToday {
               awayScore: match.away?.goals || match.away_goals || '0',
               status: match.status || match.time || 'LIVE',
               league: match.league?.name || match.competition?.name || 'Unknown League',
-              time: match.time || match.minute || '',
+              time: matchTime,
               country: match.country?.name || match.league?.country || '',
-              date: new Date().toISOString().split('T')[0]
+              date: matchDate
             };
+            
+            // Debug: stampa i primi 2 match parsati
+            if (matches.length < 2) {
+              console.log(`🔍 DEBUG Parser - Match ${matches.length + 1}: ${parsedMatch.home} vs ${parsedMatch.away}`);
+              console.log(`🔍 DEBUG Parser - Parsed date: "${parsedMatch.date}", time: "${parsedMatch.time}"`);
+              console.log(`🔍 DEBUG Parser - Raw match.added: "${match.added}"`);
+              console.log(`🔍 DEBUG Parser - Raw match.time: "${match.time}"`);
+              console.log(`🔍 DEBUG Parser - Raw match.date: "${match.date}"`);
+            }
             
             matches.push(parsedMatch);
           } catch (matchError) {
@@ -213,6 +249,17 @@ class FootballScraperToday {
       
       for (const event of events) {
         if (event.strSport === 'Soccer') {
+          // Estrai data e ora
+          let matchDate = event.dateEvent || new Date().toISOString().split('T')[0];
+          let matchTime = event.strTime || '00:00';
+          
+          // Assicurati che l'ora sia nel formato HH:MM
+          if (matchTime && !matchTime.includes(':')) {
+            matchTime = '00:00';
+          } else if (matchTime) {
+            matchTime = matchTime.substring(0, 5);
+          }
+          
           matches.push({
             home: event.strHomeTeam || 'Team A',
             away: event.strAwayTeam || 'Team B',
@@ -220,9 +267,9 @@ class FootballScraperToday {
             awayScore: event.intAwayScore || '0',
             status: event.strStatus || 'Scheduled',
             league: event.strLeague || 'Unknown League',
-            time: event.strTime || '',
+            time: matchTime,
             country: event.strCountry || '',
-            date: event.dateEvent || new Date().toISOString().split('T')[0]
+            date: matchDate
           });
         }
       }
@@ -239,6 +286,16 @@ class FootballScraperToday {
       const matchesData = data?.matches || [];
       
       for (const match of matchesData) {
+        // Estrai data e ora da utcDate (formato ISO: 2024-01-15T15:30:00Z)
+        let matchDate = new Date().toISOString().split('T')[0];
+        let matchTime = '00:00';
+        
+        if (match.utcDate) {
+          const dateObj = new Date(match.utcDate);
+          matchDate = dateObj.toISOString().split('T')[0];
+          matchTime = dateObj.toISOString().split('T')[1].substring(0, 5);
+        }
+        
         matches.push({
           home: match.homeTeam?.name || 'Team A',
           away: match.awayTeam?.name || 'Team B',
@@ -246,9 +303,9 @@ class FootballScraperToday {
           awayScore: match.score?.fullTime?.awayTeam || '0',
           status: match.status || 'Scheduled',
           league: match.competition?.name || 'Unknown League',
-          time: match.utcDate ? new Date(match.utcDate).toLocaleTimeString() : '',
+          time: matchTime,
           country: match.area?.name || '',
-          date: match.utcDate ? match.utcDate.split('T')[0] : new Date().toISOString().split('T')[0]
+          date: matchDate
         });
       }
     } catch (error) {
@@ -269,6 +326,13 @@ class FootballScraperToday {
         const today = new Date().toISOString().split('T')[0];
         
         if (matchDate === today) {
+          // Estrai ora da matchDateTime (formato ISO)
+          let matchTime = '00:00';
+          if (match.matchDateTime) {
+            const dateObj = new Date(match.matchDateTime);
+            matchTime = dateObj.toISOString().split('T')[1].substring(0, 5);
+          }
+          
           matches.push({
             home: match.team1?.teamName || 'Team A',
             away: match.team2?.teamName || 'Team B',
@@ -276,7 +340,7 @@ class FootballScraperToday {
             awayScore: match.matchResults?.[0]?.pointsTeam2 || '0',
             status: match.matchIsFinished ? 'Finished' : 'Live',
             league: match.leagueName || 'Unknown League',
-            time: match.matchDateTime ? new Date(match.matchDateTime).toLocaleTimeString() : '',
+            time: matchTime,
             country: 'Germany',
             date: matchDate
           });
@@ -297,6 +361,16 @@ class FootballScraperToday {
       for (const event of events) {
         const competitors = event.competitions?.[0]?.competitors || [];
         if (competitors.length >= 2) {
+          // Estrai data e ora da event.date (formato ISO)
+          let matchDate = new Date().toISOString().split('T')[0];
+          let matchTime = '00:00';
+          
+          if (event.date) {
+            const dateObj = new Date(event.date);
+            matchDate = dateObj.toISOString().split('T')[0];
+            matchTime = dateObj.toISOString().split('T')[1].substring(0, 5);
+          }
+          
           matches.push({
             home: competitors[0]?.team?.displayName || 'Team A',
             away: competitors[1]?.team?.displayName || 'Team B',
@@ -304,9 +378,9 @@ class FootballScraperToday {
             awayScore: competitors[1]?.score || '0',
             status: event.status?.type?.description || 'Scheduled',
             league: event.league?.name || 'Unknown League',
-            time: event.date ? new Date(event.date).toLocaleTimeString() : '',
+            time: matchTime,
             country: '',
-            date: event.date ? event.date.split('T')[0] : new Date().toISOString().split('T')[0]
+            date: matchDate
           });
         }
       }
