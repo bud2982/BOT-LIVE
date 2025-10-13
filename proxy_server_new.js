@@ -4,7 +4,7 @@ const axios = require('axios');
 const FootballScraperToday = require('./football_scraper_today');
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 // Abilita CORS per tutte le richieste
 app.use(cors());

@@ -2,10 +2,10 @@
   "name": "flutter-livescore-proxy",
   "version": "1.0.0",
   "description": "Proxy server per aggirare CORS e recuperare dati live",
-  "main": "proxy_server.js",
+  "main": "proxy_server_new.js",
   "scripts": {
-    "start": "node proxy_server.js",
-    "dev": "nodemon proxy_server.js"
+    "start": "node proxy_server_new.js",
+    "dev": "nodemon proxy_server_new.js"
   },
   "dependencies": {
     "express": "^4.18.2",
