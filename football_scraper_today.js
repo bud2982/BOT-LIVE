@@ -511,7 +511,7 @@ class FootballScraperToday {
       console.log(`📊 Fonti di successo: ${successfulSources.join(', ')}`);
       
       // Trasforma i dati nel formato atteso dal proxy
-      const transformedMatches = uniqueMatches.map(match => {
+      const transformedMatches = uniqueMatches.map((match, index) => {
         // Combina date e time per creare il timestamp ISO completo
         let startTimestamp;
         if (match.date && match.time) {
@@ -523,7 +523,15 @@ class FootballScraperToday {
           startTimestamp = new Date().toISOString();
         }
         
+        // Genera un ID univoco basato su squadre e data
+        const matchId = Math.abs(
+          `${match.home}-${match.away}-${match.date}`.split('').reduce((hash, char) => {
+            return ((hash << 5) - hash) + char.charCodeAt(0);
+          }, 0)
+        );
+        
         return {
+          id: matchId,                                 // ID univoco per la partita
           home: match.home,
           away: match.away,
           goalsHome: parseInt(match.homeScore) || 0,  // Converti homeScore -> goalsHome
@@ -538,7 +546,7 @@ class FootballScraperToday {
       
       console.log(`✅ Trasformate ${transformedMatches.length} partite nel formato corretto`);
       if (transformedMatches.length > 0) {
-        console.log(`🔍 Esempio partita trasformata: ${transformedMatches[0].home} vs ${transformedMatches[0].away}, start: ${transformedMatches[0].start}`);
+        console.log(`🔍 Esempio partita trasformata: ID=${transformedMatches[0].id}, ${transformedMatches[0].home} vs ${transformedMatches[0].away}, start: ${transformedMatches[0].start}, country: ${transformedMatches[0].country}`);
       }
       
       return {
