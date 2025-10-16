@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import '../models/fixture.dart';
 
 class TestProxyService {
-  static const String _baseUrl = 'http://localhost:3001';
+  static const String _baseUrl = 'https://bot-live-proxy.onrender.com';
   
   Future<List<Fixture>> getFixturesToday() async {
     print('TestProxyService: Recupero partite di test dal proxy server...');
@@ -37,6 +37,42 @@ class TestProxyService {
       
     } catch (e) {
       print('TestProxyService: Errore: $e');
+      rethrow;
+    }
+  }
+  
+  Future<List<Fixture>> getLiveMatches() async {
+    print('TestProxyService: Recupero partite LIVE dal proxy server...');
+    
+    try {
+      final url = Uri.parse('$_baseUrl/api/live');
+      
+      print('TestProxyService: Richiesta partite live a $url');
+      
+      final response = await http.get(url)
+          .timeout(const Duration(seconds: 10));
+      
+      print('TestProxyService: Risposta live ricevuta - Status: ${response.statusCode}');
+      
+      if (response.statusCode != 200) {
+        throw Exception('Errore server proxy (live): ${response.statusCode} - ${response.body}');
+      }
+      
+      if (response.body.isEmpty) {
+        throw Exception('Risposta server proxy vuota (live)');
+      }
+      
+      final data = json.decode(response.body);
+      print('TestProxyService: Dati live ricevuti: ${response.body.substring(0, 200)}...');
+      
+      // Parse della risposta del proxy
+      final fixtures = _parseProxyResponse(data);
+      print('TestProxyService: Convertite ${fixtures.length} partite live');
+      
+      return fixtures;
+      
+    } catch (e) {
+      print('TestProxyService: Errore recupero partite live: $e');
       rethrow;
     }
   }

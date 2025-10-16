@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../services/followed_matches_service.dart';
 import '../services/telegram_service.dart';
+import '../services/hybrid_football_service.dart';
 import '../models/fixture.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,15 +16,34 @@ class FollowedMatchesPage extends StatefulWidget {
 class _FollowedMatchesPageState extends State<FollowedMatchesPage> {
   final FollowedMatchesService _followedService = FollowedMatchesService();
   final TelegramService _telegramService = TelegramService();
+  final HybridFootballService _footballService = HybridFootballService();
   
   List<Fixture> _followedMatches = [];
   bool _isLoading = true;
   String? _error;
+  Timer? _refreshTimer;
+  DateTime? _lastUpdate;
 
   @override
   void initState() {
     super.initState();
     _loadFollowedMatches();
+    _startAutoRefresh();
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startAutoRefresh() {
+    // Aggiorna ogni 30 secondi per i risultati live
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      if (mounted && _followedMatches.isNotEmpty) {
+        _updateLiveScores();
+      }
+    });
   }
 
   Future<void> _loadFollowedMatches() async {
@@ -39,12 +60,96 @@ class _FollowedMatchesPageState extends State<FollowedMatchesPage> {
       setState(() {
         _followedMatches = matches;
         _isLoading = false;
+        _lastUpdate = DateTime.now();
       });
+      
+      // Aggiorna subito i risultati live dopo il caricamento iniziale
+      if (matches.isNotEmpty) {
+        _updateLiveScores();
+      }
     } catch (e) {
       setState(() {
         _error = e.toString();
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _updateLiveScores() async {
+    if (_followedMatches.isEmpty) return;
+    
+    try {
+      print('🔄 Aggiornamento risultati live per ${_followedMatches.length} partite seguite...');
+      
+      // Estrai gli ID delle partite seguite
+      final followedIds = _followedMatches.map((m) => m.id).toList();
+      print('📋 IDs partite seguite: $followedIds');
+      
+      // USA getLiveByIds per recuperare solo le partite seguite (più efficiente)
+      final updatedMatches = await _footballService.getLiveByIds(followedIds);
+      
+      print('📊 Ricevuti aggiornamenti per ${updatedMatches.length} partite');
+      
+      // Crea una mappa per accesso rapido
+      final Map<int, Fixture> updatedMatchesMap = {};
+      for (final match in updatedMatches) {
+        updatedMatchesMap[match.id] = match;
+      }
+      
+      // Aggiorna i risultati delle partite seguite
+      bool hasUpdates = false;
+      int updatedCount = 0;
+      
+      for (int i = 0; i < _followedMatches.length; i++) {
+        final followedMatch = _followedMatches[i];
+        
+        // Cerca la partita aggiornata
+        final updatedMatch = updatedMatchesMap[followedMatch.id];
+        
+        if (updatedMatch == null) {
+          print('⚠️ Partita ${followedMatch.home} vs ${followedMatch.away} (ID: ${followedMatch.id}) non trovata negli aggiornamenti');
+          continue;
+        }
+        
+        // Controlla se ci sono cambiamenti nei punteggi o nel tempo
+        if (updatedMatch.goalsHome != followedMatch.goalsHome ||
+            updatedMatch.goalsAway != followedMatch.goalsAway ||
+            updatedMatch.elapsed != followedMatch.elapsed) {
+          
+          print('✅ Aggiornata: ${updatedMatch.home} ${updatedMatch.goalsHome}-${updatedMatch.goalsAway} ${updatedMatch.away} (${updatedMatch.elapsed ?? "N/A"}\')');
+          print('   Vecchio: ${followedMatch.goalsHome}-${followedMatch.goalsAway} (${followedMatch.elapsed ?? "N/A"}\')');
+          
+          // Usa copyWith per preservare il campo 'start' originale
+          // e aggiornare solo i campi che cambiano (punteggi e tempo)
+          final mergedMatch = followedMatch.copyWith(
+            goalsHome: updatedMatch.goalsHome,
+            goalsAway: updatedMatch.goalsAway,
+            elapsed: updatedMatch.elapsed,
+          );
+          
+          _followedMatches[i] = mergedMatch;
+          hasUpdates = true;
+          updatedCount++;
+          
+          // Aggiorna anche in SharedPreferences per persistenza
+          await _followedService.followMatch(mergedMatch);
+        } else {
+          print('ℹ️ Nessun cambiamento per: ${followedMatch.home} vs ${followedMatch.away}');
+        }
+      }
+      
+      if (hasUpdates && mounted) {
+        setState(() {
+          _lastUpdate = DateTime.now();
+        });
+        print('✅ Aggiornate $updatedCount partite con successo');
+      } else {
+        print('ℹ️ Nessun aggiornamento necessario per le partite seguite');
+      }
+    } catch (e) {
+      print('⚠️ Errore aggiornamento risultati live: $e');
+      print('   Stack trace: ${StackTrace.current}');
+      // Non mostrare errore all'utente, continua con i dati esistenti
     }
   }
 
@@ -119,14 +224,24 @@ class _FollowedMatchesPageState extends State<FollowedMatchesPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Partite Seguite'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Partite Seguite'),
+            if (_lastUpdate != null)
+              Text(
+                'Aggiornato: ${_formatTime(_lastUpdate!)}',
+                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.normal),
+              ),
+          ],
+        ),
         backgroundColor: Colors.red,
         foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadFollowedMatches,
-            tooltip: 'Aggiorna',
+            tooltip: 'Aggiorna manualmente',
           ),
           IconButton(
             icon: const Icon(Icons.settings),
@@ -137,6 +252,19 @@ class _FollowedMatchesPageState extends State<FollowedMatchesPage> {
       ),
       body: _buildBody(),
     );
+  }
+
+  String _formatTime(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+    
+    if (difference.inSeconds < 60) {
+      return 'ora';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes}m fa';
+    } else {
+      return '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+    }
   }
 
   Widget _buildBody() {

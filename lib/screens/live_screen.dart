@@ -49,18 +49,21 @@ class _LiveScreenState extends State<LiveScreen> {
         _error = null;
       });
 
-      final allMatches = await _footballService.getFixturesToday();
+      // Usa getLiveMatches() invece di getFixturesToday() per ottenere solo partite live
+      final liveMatches = await _footballService.getLiveMatches();
       
-      // Filtra solo le partite live (con elapsed non null e > 0)
-      final liveMatches = allMatches.where((match) {
-        return match.elapsed != null && match.elapsed! > 0;
+      // Filtra solo le partite effettivamente in corso (esclude finite e non iniziate)
+      final activeLiveMatches = liveMatches.where((match) {
+        // Partita è live se ha elapsed tra 1 e 89 (esclude 90+ che sono finite)
+        // oppure se elapsed è 45 (intervallo)
+        return match.elapsed != null && match.elapsed! > 0 && match.elapsed! < 90;
       }).toList();
 
       // Ordina per paese e poi per minuti trascorsi
-      liveMatches.sort((a, b) {
+      activeLiveMatches.sort((a, b) {
         // Prima ordina per paese
-        final countryA = a.country ?? 'International';
-        final countryB = b.country ?? 'International';
+        final countryA = a.country;
+        final countryB = b.country;
         final countryCompare = countryA.compareTo(countryB);
         if (countryCompare != 0) return countryCompare;
         
@@ -72,7 +75,7 @@ class _LiveScreenState extends State<LiveScreen> {
 
       if (mounted) {
         setState(() {
-          _liveMatches = liveMatches;
+          _liveMatches = activeLiveMatches;
           _isLoading = false;
         });
       }
@@ -143,7 +146,7 @@ class _LiveScreenState extends State<LiveScreen> {
     final Map<String, List<Fixture>> grouped = {};
     
     for (final match in _liveMatches) {
-      final country = match.country ?? 'International';
+      final country = match.country;
       if (!grouped.containsKey(country)) {
         grouped[country] = [];
       }

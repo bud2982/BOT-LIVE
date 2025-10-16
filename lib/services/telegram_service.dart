@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import '../models/fixture.dart';
 
 class TelegramService {
-  static const String baseUrl = 'http://localhost:3001';
+  static const String baseUrl = 'https://bot-live-proxy.onrender.com';
   
   /// Registra una sottoscrizione per le notifiche di una partita
   Future<bool> subscribeToMatch({

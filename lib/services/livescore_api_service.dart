@@ -19,7 +19,7 @@ class LiveScoreApiService {
   bool get _isApiKeyValid => _apiKey.isNotEmpty && _apiKey != 'YOUR_LIVESCORE_API_KEY_HERE' && _apiSecret.isNotEmpty;
   
   Future<List<Fixture>> getFixturesToday() async {
-    print('LiveScoreApiService: Recupero partite di oggi da LiveScore API...');
+    print('LiveScoreApiService: Recupero partite di oggi da LiveScore API (con paginazione)...');
     
     if (!_isApiKeyValid) {
       print('ERRORE: Chiave API LiveScore non configurata!');
@@ -28,37 +28,72 @@ class LiveScoreApiService {
     }
     
     try {
-      // Richiesta partite di oggi (usando fixtures endpoint)
-      final url = Uri.parse('$_baseUrl/fixtures/matches.json?key=$_apiKey&secret=$_apiSecret');
+      final List<Fixture> allFixtures = [];
+      int currentPage = 1;
+      const int maxPages = 5; // Recupera fino a 5 pagine (150 partite max)
+      bool hasMorePages = true;
       
-      print('LiveScoreApiService: Richiesta a $url');
-      print('LiveScoreApiService: Usando chiave API: ${_apiKey.substring(0, 8)}...');
-      
-      final response = await http.get(url, headers: _headers)
-          .timeout(const Duration(seconds: 30));
-      
-      print('LiveScoreApiService: Risposta ricevuta - Status: ${response.statusCode}');
-      
-      if (response.statusCode == 401) {
-        throw Exception('Chiave API LiveScore non valida o scaduta');
-      } else if (response.statusCode == 429) {
-        throw Exception('Limite richieste API LiveScore superato');
-      } else if (response.statusCode != 200) {
-        throw Exception('Errore API LiveScore: ${response.statusCode} - ${response.body}');
+      // Recupera più pagine per ottenere tutte le partite disponibili
+      while (hasMorePages && currentPage <= maxPages) {
+        print('LiveScoreApiService: Recupero pagina $currentPage...');
+        
+        final url = Uri.parse('$_baseUrl/fixtures/list.json?key=$_apiKey&secret=$_apiSecret&page=$currentPage');
+        
+        if (currentPage == 1) {
+          print('LiveScoreApiService: Usando chiave API: ${_apiKey.substring(0, 8)}...');
+        }
+        
+        final response = await http.get(url, headers: _headers)
+            .timeout(const Duration(seconds: 30));
+        
+        print('LiveScoreApiService: Pagina $currentPage - Status: ${response.statusCode}');
+        
+        if (response.statusCode == 401) {
+          throw Exception('Chiave API LiveScore non valida o scaduta');
+        } else if (response.statusCode == 429) {
+          throw Exception('Limite richieste API LiveScore superato');
+        } else if (response.statusCode != 200) {
+          throw Exception('Errore API LiveScore: ${response.statusCode} - ${response.body}');
+        }
+        
+        if (response.body.isEmpty) {
+          print('LiveScoreApiService: Pagina $currentPage vuota, fine paginazione');
+          break;
+        }
+        
+        final data = json.decode(response.body);
+        
+        // Parse della risposta LiveScore
+        final fixtures = _parseLiveScoreResponse(data);
+        print('LiveScoreApiService: Pagina $currentPage - Trovate ${fixtures.length} partite');
+        
+        if (fixtures.isEmpty) {
+          // Nessuna partita in questa pagina, fine paginazione
+          hasMorePages = false;
+        } else {
+          allFixtures.addAll(fixtures);
+          
+          // Se abbiamo meno di 30 partite, probabilmente è l'ultima pagina
+          if (fixtures.length < 30) {
+            hasMorePages = false;
+          } else {
+            currentPage++;
+          }
+        }
       }
       
-      if (response.body.isEmpty) {
-        throw Exception('Risposta API LiveScore vuota');
+      print('LiveScoreApiService: ✅ TOTALE partite recuperate: ${allFixtures.length} (da $currentPage pagine)');
+      
+      // Rimuovi duplicati basati sull'ID
+      final uniqueFixtures = <int, Fixture>{};
+      for (final fixture in allFixtures) {
+        uniqueFixtures[fixture.id] = fixture;
       }
       
-      final data = json.decode(response.body);
-      print('LiveScoreApiService: Dati ricevuti: ${response.body.substring(0, 200)}...');
+      final finalFixtures = uniqueFixtures.values.toList();
+      print('LiveScoreApiService: ✅ Partite uniche dopo deduplicazione: ${finalFixtures.length}');
       
-      // Parse della risposta LiveScore
-      final fixtures = _parseLiveScoreResponse(data);
-      print('LiveScoreApiService: Convertite ${fixtures.length} partite');
-      
-      return fixtures;
+      return finalFixtures;
       
     } on FormatException catch (e) {
       throw Exception('Errore formato risposta LiveScore API: $e');
@@ -76,36 +111,51 @@ class LiveScoreApiService {
     }
     
     try {
-      // Richiesta partite live (usando matches/live.json per dati più ricchi)
-      final url = Uri.parse('$_baseUrl/matches/live.json?key=$_apiKey&secret=$_apiSecret');
+      // STRATEGIA DOPPIA: Prova prima matches/live.json, poi fallback a fixtures/list.json filtrate
+      List<Fixture> liveFixtures = [];
       
-      print('LiveScoreApiService: Richiesta partite live a $url');
-      
-      final response = await http.get(url, headers: _headers)
-          .timeout(const Duration(seconds: 30));
-      
-      print('LiveScoreApiService: Risposta live ricevuta - Status: ${response.statusCode}');
-      
-      if (response.statusCode == 401) {
-        throw Exception('Chiave API LiveScore non valida o scaduta');
-      } else if (response.statusCode == 429) {
-        throw Exception('Limite richieste API LiveScore superato');
-      } else if (response.statusCode != 200) {
-        throw Exception('Errore API LiveScore: ${response.statusCode} - ${response.body}');
+      // TENTATIVO 1: Endpoint matches/live.json (partite live dedicate)
+      try {
+        final liveUrl = Uri.parse('$_baseUrl/matches/live.json?key=$_apiKey&secret=$_apiSecret');
+        print('LiveScoreApiService: Tentativo 1 - matches/live.json');
+        
+        final liveResponse = await http.get(liveUrl, headers: _headers)
+            .timeout(const Duration(seconds: 30));
+        
+        if (liveResponse.statusCode == 200 && liveResponse.body.isNotEmpty) {
+          final liveData = json.decode(liveResponse.body);
+          final fixtures = _parseLiveScoreResponse(liveData, isLiveEndpoint: true);
+          
+          // Filtra solo partite effettivamente live
+          liveFixtures = fixtures.where((f) {
+            return f.elapsed != null && f.elapsed! > 0;
+          }).toList();
+          
+          print('LiveScoreApiService: matches/live.json - Trovate ${liveFixtures.length} partite live');
+        }
+      } catch (e) {
+        print('LiveScoreApiService: matches/live.json fallito: $e');
       }
       
-      if (response.body.isEmpty) {
-        throw Exception('Risposta API LiveScore vuota');
+      // TENTATIVO 2: Se non abbiamo partite live, prova con fixtures/list.json filtrate
+      if (liveFixtures.isEmpty) {
+        print('LiveScoreApiService: Tentativo 2 - Filtro fixtures/list.json per partite live');
+        
+        try {
+          final allFixtures = await getFixturesToday();
+          
+          // Filtra solo partite con elapsed > 0 (in corso)
+          liveFixtures = allFixtures.where((f) {
+            return f.elapsed != null && f.elapsed! > 0;
+          }).toList();
+          
+          print('LiveScoreApiService: fixtures/list.json filtrate - Trovate ${liveFixtures.length} partite live');
+        } catch (e) {
+          print('LiveScoreApiService: Anche fixtures/list.json fallito: $e');
+        }
       }
       
-      final data = json.decode(response.body);
-      print('LiveScoreApiService: Dati live ricevuti: ${response.body.substring(0, 200)}...');
-      
-      // Parse della risposta LiveScore per partite live
-      final fixtures = _parseLiveScoreResponse(data);
-      final liveFixtures = fixtures.where((f) => f.elapsed != null).toList();
-      
-      print('LiveScoreApiService: Trovate ${liveFixtures.length} partite live');
+      print('LiveScoreApiService: ✅ TOTALE partite live: ${liveFixtures.length}');
       return liveFixtures;
       
     } on FormatException catch (e) {
@@ -116,7 +166,7 @@ class LiveScoreApiService {
     }
   }
   
-  List<Fixture> _parseLiveScoreResponse(Map<String, dynamic> data) {
+  List<Fixture> _parseLiveScoreResponse(Map<String, dynamic> data, {bool isLiveEndpoint = false}) {
     try {
       final List<Fixture> fixtures = [];
       
@@ -125,7 +175,15 @@ class LiveScoreApiService {
       
       if (data['success'] == true && data['data'] != null) {
         final dataSection = data['data'];
-        if (dataSection['match'] != null && dataSection['match'] is List) {
+        
+        // IMPORTANTE: fixtures/list.json usa 'fixtures', matches/live.json usa 'match'
+        if (isLiveEndpoint && dataSection['match'] != null && dataSection['match'] is List) {
+          matches = dataSection['match'] as List<dynamic>;
+          print('LiveScoreApiService: Trovato array "match" (endpoint live)');
+        } else if (!isLiveEndpoint && dataSection['fixtures'] != null && dataSection['fixtures'] is List) {
+          matches = dataSection['fixtures'] as List<dynamic>;
+          print('LiveScoreApiService: Trovato array "fixtures" (endpoint fixtures)');
+        } else if (dataSection['match'] != null && dataSection['match'] is List) {
           matches = dataSection['match'] as List<dynamic>;
         } else if (dataSection['fixtures'] != null && dataSection['fixtures'] is List) {
           matches = dataSection['fixtures'] as List<dynamic>;
@@ -142,12 +200,16 @@ class LiveScoreApiService {
       
       if (matches == null) {
         print('LiveScoreApiService: Formato risposta non riconosciuto');
+        print('LiveScoreApiService: Chiavi disponibili: ${data.keys.toList()}');
+        if (data['data'] != null && data['data'] is Map) {
+          print('LiveScoreApiService: Chiavi in data: ${(data['data'] as Map).keys.toList()}');
+        }
         return [];
       }
       
       for (final match in matches) {
         try {
-          final fixture = _parseLiveScoreMatch(match);
+          final fixture = _parseLiveScoreMatch(match, isLiveEndpoint: isLiveEndpoint);
           if (fixture != null) {
             fixtures.add(fixture);
           }
@@ -165,7 +227,7 @@ class LiveScoreApiService {
     }
   }
   
-  Fixture? _parseLiveScoreMatch(Map<String, dynamic> match) {
+  Fixture? _parseLiveScoreMatch(Map<String, dynamic> match, {bool isLiveEndpoint = false}) {
     try {
       // Parse squadre (formato LiveScore API)
       String homeTeam = 'Team Casa';
@@ -218,32 +280,106 @@ class LiveScoreApiService {
       
       // Parse data/ora (formato LiveScore API)
       DateTime startTime = DateTime.now();
-      if (match['scheduled'] != null) {
-        // Il formato scheduled è tipo "08:00"
-        final timeString = match['scheduled'].toString();
+      
+      // Prova prima con il campo 'time' (formato "HH:MM:SS" da fixtures/list.json)
+      if (match['time'] != null && match['time'].toString().contains(':')) {
+        final timeString = match['time'].toString();
         final now = DateTime.now();
         final timeParts = timeString.split(':');
-        if (timeParts.length == 2) {
+        if (timeParts.length >= 2) {
           final hour = int.tryParse(timeParts[0]) ?? now.hour;
           final minute = int.tryParse(timeParts[1]) ?? now.minute;
           startTime = DateTime(now.year, now.month, now.day, hour, minute);
         }
-      } else if (match['start_time'] != null) {
+      }
+      // Poi prova con 'scheduled' (formato "HH:MM")
+      else if (match['scheduled'] != null) {
+        final timeString = match['scheduled'].toString();
+        final now = DateTime.now();
+        final timeParts = timeString.split(':');
+        if (timeParts.length >= 2) {
+          final hour = int.tryParse(timeParts[0]) ?? now.hour;
+          final minute = int.tryParse(timeParts[1]) ?? now.minute;
+          startTime = DateTime(now.year, now.month, now.day, hour, minute);
+        }
+      } 
+      // Poi prova con 'start_time' (formato ISO)
+      else if (match['start_time'] != null) {
         startTime = DateTime.tryParse(match['start_time'].toString()) ?? DateTime.now();
-      } else if (match['date'] != null) {
+      } 
+      // Infine prova con 'date' (formato ISO)
+      else if (match['date'] != null && match['date'].toString().contains('T')) {
         startTime = DateTime.tryParse(match['date'].toString()) ?? DateTime.now();
       }
       
       // Parse stato partita e minuti (formato LiveScore API)
       int? elapsed;
-      final status = match['status']?.toString().toLowerCase() ?? '';
+      final status = match['status']?.toString().toUpperCase() ?? '';
+      final timeField = match['time']?.toString() ?? '';
       
-      if (status.contains('in play') || status.contains('live') || status.contains('playing')) {
-        elapsed = int.tryParse(match['time']?.toString() ?? '45') ?? 45;
-      } else if (match['elapsed'] != null) {
-        elapsed = int.tryParse(match['elapsed'].toString());
-      } else if (match['minute'] != null) {
-        elapsed = int.tryParse(match['minute'].toString());
+      // IMPORTANTE: Distingui tra endpoint live e fixtures
+      if (isLiveEndpoint) {
+        // Per matches/live.json: usa lo status per determinare se è live
+        // Status possibili: "IN PLAY", "FIRST HALF", "SECOND HALF", "HALF TIME BREAK", "FINISHED", "NOT STARTED"
+        
+        if (status.contains('IN PLAY') || status.contains('FIRST HALF') || status.contains('SECOND HALF')) {
+          // Partita in corso - prova a estrarre il minuto dal campo 'time'
+          // Il campo 'time' può contenere: "45'", "67'", "90+2'", ecc.
+          if (timeField.contains("'")) {
+            // Estrai il numero prima dell'apostrofo
+            final minuteMatch = RegExp(r'(\d+)').firstMatch(timeField);
+            if (minuteMatch != null) {
+              elapsed = int.tryParse(minuteMatch.group(1)!);
+            }
+          } else {
+            // Se non c'è apostrofo, prova a parsare direttamente
+            elapsed = int.tryParse(timeField);
+          }
+          
+          // Prova anche con il campo 'minute' se disponibile
+          if (elapsed == null && match['minute'] != null) {
+            elapsed = int.tryParse(match['minute'].toString());
+          }
+          
+          // Prova con il campo 'elapsed' se disponibile
+          if (elapsed == null && match['elapsed'] != null) {
+            elapsed = int.tryParse(match['elapsed'].toString());
+          }
+          
+          // Se non abbiamo trovato elapsed, imposta un valore di default per indicare che è live
+          elapsed ??= 1;
+        } else if (status.contains('HALF TIME')) {
+          // Intervallo - imposta a 45 minuti
+          elapsed = 45;
+        } else if (status.contains('FINISHED') || status == 'FT' || timeField == 'FT') {
+          // Partita finita - imposta a 90+ per indicare che è terminata
+          elapsed = 90;
+        }
+        // Per "NOT STARTED" o altri status, elapsed rimane null
+        
+      } else {
+        // Per fixtures/list.json: elapsed/time è l'orario (HH:MM:SS), non i minuti
+        // Usa solo lo status per determinare se è live
+        if (status.contains('IN PLAY') || status.contains('LIVE') || status.contains('PLAYING') || 
+            status.contains('FIRST HALF') || status.contains('SECOND HALF')) {
+          // Prova a estrarre il minuto se disponibile
+          if (match['minute'] != null) {
+            elapsed = int.tryParse(match['minute'].toString());
+          }
+          
+          // Prova anche con il campo 'elapsed' se disponibile
+          if (elapsed == null && match['elapsed'] != null) {
+            elapsed = int.tryParse(match['elapsed'].toString());
+          }
+          
+          // Se non c'è il minuto, imposta un valore di default
+          elapsed ??= 1;
+        } else if (status.contains('HALF TIME')) {
+          elapsed = 45;
+        } else if (status.contains('FINISHED') || status == 'FT') {
+          elapsed = 90;
+        }
+        // NON usare match['time'] per fixtures perché è l'orario
       }
       
       // Parse competizione e paese (formato LiveScore API)
@@ -266,20 +402,15 @@ class LiveScoreApiService {
       // Parse del paese - migliorato per gestire diversi formati API
       bool countryFound = false;
       
-      print('LiveScoreApiService: Parsing paese per partita $homeTeam vs $awayTeam');
-      print('LiveScoreApiService: Struttura match keys: ${match.keys.toList()}');
-      
       // Formato 1: country come stringa diretta
       if (match['country'] != null && match['country'] is String) {
         country = match['country'].toString();
         countryFound = true;
-        print('LiveScoreApiService: Paese trovato (formato stringa): $country');
       }
       // Formato 2: country.name (per partite live)
       else if (match['country'] != null && match['country'] is Map && match['country']['name'] != null) {
         country = match['country']['name'].toString();
         countryFound = true;
-        print('LiveScoreApiService: Paese trovato (formato country.name): $country');
       }
       // Formato 3: location.country
       else if (match['location'] != null && match['location'] is Map) {
@@ -287,11 +418,9 @@ class LiveScoreApiService {
           if (match['location']['country'] is Map && match['location']['country']['name'] != null) {
             country = match['location']['country']['name'].toString();
             countryFound = true;
-            print('LiveScoreApiService: Paese trovato (formato location.country.name): $country');
           } else if (match['location']['country'] is String) {
             country = match['location']['country'].toString();
             countryFound = true;
-            print('LiveScoreApiService: Paese trovato (formato location.country): $country');
           }
         }
       }
@@ -300,11 +429,9 @@ class LiveScoreApiService {
         if (match['competition']['country'] is Map && match['competition']['country']['name'] != null) {
           country = match['competition']['country']['name'].toString();
           countryFound = true;
-          print('LiveScoreApiService: Paese trovato (formato competition.country.name): $country');
         } else if (match['competition']['country'] is String) {
           country = match['competition']['country'].toString();
           countryFound = true;
-          print('LiveScoreApiService: Paese trovato (formato competition.country): $country');
         }
       }
       // Formato 5: league.country
@@ -312,11 +439,9 @@ class LiveScoreApiService {
         if (match['league']['country'] is Map && match['league']['country']['name'] != null) {
           country = match['league']['country']['name'].toString();
           countryFound = true;
-          print('LiveScoreApiService: Paese trovato (formato league.country.name): $country');
         } else if (match['league']['country'] is String) {
           country = match['league']['country'].toString();
           countryFound = true;
-          print('LiveScoreApiService: Paese trovato (formato league.country): $country');
         }
       }
       // Formato 6: federation
@@ -324,11 +449,9 @@ class LiveScoreApiService {
         if (match['federation'] is Map && match['federation']['name'] != null) {
           country = match['federation']['name'].toString();
           countryFound = true;
-          print('LiveScoreApiService: Paese trovato (formato federation.name): $country');
         } else if (match['federation'] is String) {
           country = match['federation'].toString();
           countryFound = true;
-          print('LiveScoreApiService: Paese trovato (formato federation): $country');
         }
       }
       
@@ -342,15 +465,7 @@ class LiveScoreApiService {
           competitionId = int.tryParse(match['competition']['id'].toString());
         }
         
-        print('LiveScoreApiService: Paese non trovato nei dati API, deduzione dalla lega: $league (competition_id: $competitionId)');
-        print('LiveScoreApiService: Struttura completa match per debug:');
-        print('  - competition: ${match['competition']}');
-        print('  - league: ${match['league']}');
-        print('  - country: ${match['country']}');
-        print('  - location: ${match['location']}');
-        print('  - federation: ${match['federation']}');
         country = _getCountryFromLeague(league, competitionId);
-        print('LiveScoreApiService: Paese dedotto: $country');
       }
       
       return Fixture(
@@ -373,7 +488,6 @@ class LiveScoreApiService {
   
   String _getCountryFromLeague(String league, [int? competitionId]) {
     final leagueLower = league.toLowerCase();
-    print('_getCountryFromLeague: Analizzando "$league" (lowercase: "$leagueLower", competitionId: $competitionId)');
     
     // Prima controlla se possiamo usare il competition_id per disambiguare
     if (competitionId != null) {

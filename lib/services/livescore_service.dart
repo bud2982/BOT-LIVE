@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import '../models/fixture.dart';
 
 class LiveScoreService {
-  static const String _baseUrl = 'http://localhost:3001';
+  static const String _baseUrl = 'https://bot-live-proxy.onrender.com';
   
   Future<List<Fixture>> getFixturesToday() async {
     print('LiveScoreService: Recupero partite di oggi dalle API ufficiali LiveScore...');
