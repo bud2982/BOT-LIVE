@@ -1,64 +1,70 @@
 const axios = require('axios');
 
-// Scraper specializzato per partite di OGGI - SOLO API UFFICIALI
+// Scraper per API UFFICIALE livescore-api.com (A PAGAMENTO)
 class FootballScraperToday {
   constructor() {
-    // SOLO API LIVESCORE UFFICIALI E VERIFICATE - NO FALLBACK
+    // Credenziali API ufficiali livescore-api.com
+    // Usa variabili d'ambiente su Render, fallback per sviluppo locale
+    this.apiKey = process.env.LIVESCORE_API_KEY || 'wUOF0E1DmdetayWk';
+    this.apiSecret = process.env.LIVESCORE_API_SECRET || 'Vng53xQ0F9Knz416YPLZuNCR1Rkbqhvl';
+    this.baseUrl = 'https://livescore-api.com/api-client';
+    
+    // Data di oggi nel formato YYYY-MM-DD
+    const today = new Date().toISOString().split('T')[0];
+    
+    // ENDPOINT UFFICIALI LIVESCORE-API.COM
     this.sources = [
-      // LIVESCORE API UFFICIALE (SOLO QUESTE)
+      // 1. PARTITE LIVE (massima priorità)
       {
-        name: 'LiveScore API Live Matches',
-        url: 'http://livescore-api.com/api-client/matches/live.json',
+        name: 'LiveScore API - Live Matches',
+        url: `${this.baseUrl}/scores/live.json`,
         type: 'api',
         params: {
-          key: 'wUOF0E1DmdetayWk',
-          secret: 'Vng53xQ0F9Knz416YPLZuNCR1Rkbqhvl'
+          key: this.apiKey,
+          secret: this.apiSecret
         },
         priority: 1
       },
+      
+      // 2. FIXTURES DI OGGI (tutte le partite programmate)
       {
-        name: 'LiveScore API Scores',
-        url: 'https://livescore-api.com/api-client/scores/live.json',
+        name: 'LiveScore API - Today Fixtures',
+        url: `${this.baseUrl}/fixtures/matches.json`,
         type: 'api',
         params: {
-          key: 'wUOF0E1DmdetayWk',
-          secret: 'Vng53xQ0F9Knz416YPLZuNCR1Rkbqhvl'
+          key: this.apiKey,
+          secret: this.apiSecret,
+          date: today
         },
         priority: 2
-      },
-      {
-        name: 'LiveScore API Fixtures Today',
-        url: 'https://livescore-api.com/api-client/fixtures/list.json',
-        type: 'api',
-        params: {
-          key: 'wUOF0E1DmdetayWk',
-          secret: 'Vng53xQ0F9Knz416YPLZuNCR1Rkbqhvl',
-          date: 'today'
-        },
-        priority: 3
       }
     ];
+    
+    // Cache per ridurre chiamate API (60 secondi)
+    this.cache = {
+      data: null,
+      timestamp: null,
+      ttl: 60000 // 60 secondi
+    };
   }
 
   getHeaders() {
     return {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept': 'application/json, text/html, */*',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Accept': 'application/json',
       'Accept-Language': 'it-IT,it;q=0.9,en;q=0.8',
-      'Accept-Encoding': 'gzip, deflate, br',
-      'Connection': 'keep-alive',
-      'Cache-Control': 'no-cache'
+      'Connection': 'keep-alive'
     };
   }
 
   async randomDelay() {
-    const delay = Math.random() * 1000 + 500; // 500-1500ms
+    const delay = Math.random() * 500 + 300; // 300-800ms
     await new Promise(resolve => setTimeout(resolve, delay));
   }
 
   // Metodo per determinare la nazione dalla lega
   getCountryFromLeague(league) {
-    if (!league) return 'International';
+    if (!league) return 'Other';
     
     const leagueCountryMap = {
       // Europa
@@ -68,7 +74,6 @@ class FootballScraperToday {
       'League Two': 'England',
       'La Liga': 'Spain',
       'Segunda División': 'Spain',
-      'Segunda B': 'Spain',
       'Serie A': 'Italy',
       'Serie B': 'Italy',
       'Bundesliga': 'Germany',
@@ -77,32 +82,22 @@ class FootballScraperToday {
       'Ligue 2': 'France',
       'Eredivisie': 'Netherlands',
       'Primeira Liga': 'Portugal',
-      'Liga 3': 'Portugal',
-      'Segunda Liga': 'Portugal',
       'Ekstraklasa': 'Poland',
-      '2nd Liga': 'Poland',
       'Super League': 'Greece',
-      'Super League 2': 'Greece',
-      'Campeonato de Portugal': 'Portugal',
-      '3rd league': 'Czech Republic',
       
       // Asia
       'J. League': 'Japan',
       'J. League 2': 'Japan',
       'K-League 1': 'South Korea',
       'K-League 2': 'South Korea',
-      'League 1': 'China',
-      'PFL': 'Philippines',
-      
-      // Europa dell'Est
-      'Premier League': 'Ukraine',
-      'Football National League': 'Russia',
+      'Chinese Super League': 'China',
       
       // Internazionali
       'Champions League': 'International',
       'Europa League': 'International',
       'World Cup': 'International',
-      'Euro': 'International'
+      'Euro': 'International',
+      'Copa America': 'International'
     };
     
     // Cerca corrispondenza esatta
@@ -127,296 +122,103 @@ class FootballScraperToday {
     if (leagueLower.includes('ligue') || leagueLower.includes('french')) return 'France';
     if (leagueLower.includes('eredivisie') || leagueLower.includes('dutch')) return 'Netherlands';
     if (leagueLower.includes('primeira') || leagueLower.includes('portuguese')) return 'Portugal';
-    if (leagueLower.includes('league') && leagueLower.includes('j')) return 'Japan';
-    if (leagueLower.includes('league') && leagueLower.includes('k')) return 'South Korea';
     
     return 'Other';
   }
 
-  parseResponse(data, sourceName) {
-    try {
-      // Parser per LiveScore API
-      if (sourceName.includes('LiveScore API')) {
-        return this.parseLiveScoreAPI(data);
-      }
-      
-      // Parser per TheSportsDB
-      if (sourceName.includes('TheSportsDB')) {
-        return this.parseTheSportsDB(data);
-      }
-      
-      // Parser per Football-Data
-      if (sourceName.includes('Football-Data')) {
-        return this.parseFootballData(data);
-      }
-      
-      // Parser per OpenLigaDB
-      if (sourceName.includes('API') && !sourceName.includes('LiveScore')) {
-        return this.parseOpenLigaDB(data);
-      }
-      
-      // Parser per ESPN
-      if (sourceName.includes('ESPN')) {
-        return this.parseESPN(data);
-      }
-      
-      // Parser per RSS
-      if (sourceName.includes('RSS')) {
-        return this.parseRSS(data);
-      }
-      
-      return [];
-    } catch (error) {
-      console.log(`❌ Errore parsing ${sourceName}: ${error.message}`);
-      return [];
-    }
-  }
-
-  parseLiveScoreAPI(data) {
+  parseLiveScoreAPI(data, sourceName) {
     const matches = [];
     try {
-      // Struttura: data.data.match per live matches
-      const matchesData = data?.data?.data?.match || data?.data?.match || [];
+      // L'API ufficiale restituisce: { success: true, data: { match: [...] } }
+      // oppure { success: true, data: { fixtures: [...] } }
       
-      if (Array.isArray(matchesData)) {
-        for (const match of matchesData) {
-          try {
-            // Estrai data e ora dalla risposta API
-            let matchDate = new Date().toISOString().split('T')[0]; // Default: oggi
-            let matchTime = '00:00'; // Default: mezzanotte
-            
-            // Prova a estrarre la data dall'API
-            if (match.date) {
-              matchDate = match.date;
-            } else if (match.added) {
-              // Campo 'added' contiene timestamp completo (es: "2024-01-15 15:30:00")
-              matchDate = match.added.split(' ')[0];
-              matchTime = match.added.split(' ')[1]?.substring(0, 5) || '00:00';
-            } else if (match.location) {
-              // Alcuni endpoint usano 'location' per timestamp
-              const locationDate = new Date(match.location);
-              if (!isNaN(locationDate.getTime())) {
-                matchDate = locationDate.toISOString().split('T')[0];
-                matchTime = locationDate.toISOString().split('T')[1].substring(0, 5);
-              }
-            }
-            
-            // Prova a estrarre l'ora dall'API
-            if (match.time && match.time.includes(':')) {
-              matchTime = match.time.substring(0, 5);
-            } else if (match.fixture_time) {
-              matchTime = match.fixture_time.substring(0, 5);
-            }
-            
-            // Estrai i punteggi - supporta sia oggetti che stringhe
-            let homeScore = '0';
-            let awayScore = '0';
-            
-            if (match.score && typeof match.score === 'string') {
-              // Formato stringa: "3 - 1"
-              const scoreParts = match.score.split('-').map(s => s.trim());
-              if (scoreParts.length === 2) {
-                homeScore = scoreParts[0] || '0';
-                awayScore = scoreParts[1] || '0';
-              }
-            } else if (match.home?.goals !== undefined || match.home_goals !== undefined) {
-              // Formato oggetto
-              homeScore = String(match.home?.goals || match.home_goals || '0');
-              awayScore = String(match.away?.goals || match.away_goals || '0');
-            }
-            
-            const parsedMatch = {
-              home: match.home?.name || match.home_name || 'Team A',
-              away: match.away?.name || match.away_name || 'Team B',
-              homeScore: homeScore,
-              awayScore: awayScore,
-              status: match.status || match.time || 'LIVE',
-              league: match.league?.name || match.competition?.name || match.competition_name || 'Unknown League',
-              time: matchTime,
-              country: match.country?.name || match.league?.country || '',
-              date: matchDate,
-              elapsed: match.elapsed || null
-            };
-            
-            // Debug: stampa i primi 2 match parsati
-            if (matches.length < 2) {
-              console.log(`🔍 DEBUG Parser - Match ${matches.length + 1}: ${parsedMatch.home} vs ${parsedMatch.away}`);
-              console.log(`🔍 DEBUG Parser - Parsed date: "${parsedMatch.date}", time: "${parsedMatch.time}"`);
-              console.log(`🔍 DEBUG Parser - Raw match.added: "${match.added}"`);
-              console.log(`🔍 DEBUG Parser - Raw match.time: "${match.time}"`);
-              console.log(`🔍 DEBUG Parser - Raw match.date: "${match.date}"`);
-            }
-            
-            matches.push(parsedMatch);
-          } catch (matchError) {
-            console.log(`⚠️ Errore parsing singola partita LiveScore: ${matchError.message}`);
-          }
-        }
+      if (!data.success) {
+        console.log(`❌ API Error: ${data.error || 'Unknown error'}`);
+        return matches;
       }
-    } catch (error) {
-      console.log(`❌ Errore parsing LiveScore API: ${error.message}`);
-    }
-    
-    return matches;
-  }
-
-  parseTheSportsDB(data) {
-    const matches = [];
-    try {
-      const events = data?.events || [];
       
-      for (const event of events) {
-        if (event.strSport === 'Soccer') {
+      const matchesData = data?.data?.match || data?.data?.fixtures || [];
+      
+      if (!Array.isArray(matchesData)) {
+        console.log(`⚠️ Formato dati non valido da ${sourceName}`);
+        return matches;
+      }
+      
+      console.log(`📦 Ricevuti ${matchesData.length} match da ${sourceName}`);
+      
+      for (const match of matchesData) {
+        try {
           // Estrai data e ora
-          let matchDate = event.dateEvent || new Date().toISOString().split('T')[0];
-          let matchTime = event.strTime || '00:00';
-          
-          // Assicurati che l'ora sia nel formato HH:MM
-          if (matchTime && !matchTime.includes(':')) {
-            matchTime = '00:00';
-          } else if (matchTime) {
-            matchTime = matchTime.substring(0, 5);
-          }
-          
-          matches.push({
-            home: event.strHomeTeam || 'Team A',
-            away: event.strAwayTeam || 'Team B',
-            homeScore: event.intHomeScore || '0',
-            awayScore: event.intAwayScore || '0',
-            status: event.strStatus || 'Scheduled',
-            league: event.strLeague || 'Unknown League',
-            time: matchTime,
-            country: event.strCountry || '',
-            date: matchDate
-          });
-        }
-      }
-    } catch (error) {
-      console.log(`❌ Errore parsing TheSportsDB: ${error.message}`);
-    }
-    
-    return matches;
-  }
-
-  parseFootballData(data) {
-    const matches = [];
-    try {
-      const matchesData = data?.matches || [];
-      
-      for (const match of matchesData) {
-        // Estrai data e ora da utcDate (formato ISO: 2024-01-15T15:30:00Z)
-        let matchDate = new Date().toISOString().split('T')[0];
-        let matchTime = '00:00';
-        
-        if (match.utcDate) {
-          const dateObj = new Date(match.utcDate);
-          matchDate = dateObj.toISOString().split('T')[0];
-          matchTime = dateObj.toISOString().split('T')[1].substring(0, 5);
-        }
-        
-        matches.push({
-          home: match.homeTeam?.name || 'Team A',
-          away: match.awayTeam?.name || 'Team B',
-          homeScore: match.score?.fullTime?.homeTeam || '0',
-          awayScore: match.score?.fullTime?.awayTeam || '0',
-          status: match.status || 'Scheduled',
-          league: match.competition?.name || 'Unknown League',
-          time: matchTime,
-          country: match.area?.name || '',
-          date: matchDate
-        });
-      }
-    } catch (error) {
-      console.log(`❌ Errore parsing Football-Data: ${error.message}`);
-    }
-    
-    return matches;
-  }
-
-  parseOpenLigaDB(data) {
-    const matches = [];
-    try {
-      const matchesData = Array.isArray(data) ? data : [];
-      
-      for (const match of matchesData) {
-        // Solo partite di oggi
-        const matchDate = match.matchDateTime ? match.matchDateTime.split('T')[0] : '';
-        const today = new Date().toISOString().split('T')[0];
-        
-        if (matchDate === today) {
-          // Estrai ora da matchDateTime (formato ISO)
-          let matchTime = '00:00';
-          if (match.matchDateTime) {
-            const dateObj = new Date(match.matchDateTime);
-            matchTime = dateObj.toISOString().split('T')[1].substring(0, 5);
-          }
-          
-          matches.push({
-            home: match.team1?.teamName || 'Team A',
-            away: match.team2?.teamName || 'Team B',
-            homeScore: match.matchResults?.[0]?.pointsTeam1 || '0',
-            awayScore: match.matchResults?.[0]?.pointsTeam2 || '0',
-            status: match.matchIsFinished ? 'Finished' : 'Live',
-            league: match.leagueName || 'Unknown League',
-            time: matchTime,
-            country: 'Germany',
-            date: matchDate
-          });
-        }
-      }
-    } catch (error) {
-      console.log(`❌ Errore parsing OpenLigaDB: ${error.message}`);
-    }
-    
-    return matches;
-  }
-
-  parseESPN(data) {
-    const matches = [];
-    try {
-      const events = data?.events || [];
-      
-      for (const event of events) {
-        const competitors = event.competitions?.[0]?.competitors || [];
-        if (competitors.length >= 2) {
-          // Estrai data e ora da event.date (formato ISO)
           let matchDate = new Date().toISOString().split('T')[0];
           let matchTime = '00:00';
           
-          if (event.date) {
-            const dateObj = new Date(event.date);
-            matchDate = dateObj.toISOString().split('T')[0];
-            matchTime = dateObj.toISOString().split('T')[1].substring(0, 5);
+          // L'API ufficiale usa 'date' e 'time'
+          if (match.date) {
+            matchDate = match.date;
           }
           
-          matches.push({
-            home: competitors[0]?.team?.displayName || 'Team A',
-            away: competitors[1]?.team?.displayName || 'Team B',
-            homeScore: competitors[0]?.score || '0',
-            awayScore: competitors[1]?.score || '0',
-            status: event.status?.type?.description || 'Scheduled',
-            league: event.league?.name || 'Unknown League',
+          // Il campo 'time' è nel formato "HH:MM:SS", estraiamo solo "HH:MM"
+          if (match.time && match.time.includes(':')) {
+            matchTime = match.time.substring(0, 5);
+          }
+          
+          // Estrai punteggi (solo per partite live)
+          let homeScore = '0';
+          let awayScore = '0';
+          
+          if (match.score && typeof match.score === 'string') {
+            const scoreParts = match.score.split('-').map(s => s.trim());
+            if (scoreParts.length === 2) {
+              homeScore = scoreParts[0] || '0';
+              awayScore = scoreParts[1] || '0';
+            }
+          }
+          
+          // Estrai nomi squadre
+          const homeName = match.home_name || match.home?.name || 'Team A';
+          const awayName = match.away_name || match.away?.name || 'Team B';
+          
+          // Estrai lega - CORRETTO: usa competition.name
+          const leagueName = match.competition?.name || match.competition_name || match.league?.name || 'Unknown League';
+          
+          // Estrai paese - se non disponibile, lo determiniamo dalla lega
+          const countryName = match.country_name || match.country?.name || match.league?.country || '';
+          
+          // Estrai ID ufficiale se disponibile
+          const matchId = match.id || match.fixture_id || null;
+          
+          // Estrai status e elapsed (solo per partite live)
+          const status = match.status || 'SCHEDULED';
+          const elapsed = match.elapsed || null;
+          
+          // Estrai location (stadio)
+          const location = match.location || '';
+          
+          const parsedMatch = {
+            id: matchId,
+            home: homeName,
+            away: awayName,
+            homeScore: homeScore,
+            awayScore: awayScore,
+            status: status,
+            league: leagueName,
             time: matchTime,
-            country: '',
-            date: matchDate
-          });
+            country: countryName,
+            date: matchDate,
+            elapsed: elapsed,
+            location: location,
+            source: sourceName
+          };
+          
+          matches.push(parsedMatch);
+          
+        } catch (matchError) {
+          console.log(`⚠️ Errore parsing singola partita: ${matchError.message}`);
         }
       }
+      
     } catch (error) {
-      console.log(`❌ Errore parsing ESPN: ${error.message}`);
-    }
-    
-    return matches;
-  }
-
-  parseRSS(data) {
-    // RSS parsing semplificato - estrae solo informazioni base
-    const matches = [];
-    try {
-      // Per ora ritorna array vuoto, RSS non contiene dati strutturati di partite
-      console.log(`📰 RSS feed ricevuto ma non contiene dati strutturati di partite`);
-    } catch (error) {
-      console.log(`❌ Errore parsing RSS: ${error.message}`);
+      console.log(`❌ Errore parsing ${sourceName}: ${error.message}`);
     }
     
     return matches;
@@ -431,8 +233,27 @@ class FootballScraperToday {
            match.home !== match.away;
   }
 
+  // Verifica se la cache è ancora valida
+  isCacheValid() {
+    if (!this.cache.data || !this.cache.timestamp) {
+      return false;
+    }
+    
+    const now = Date.now();
+    const age = now - this.cache.timestamp;
+    
+    return age < this.cache.ttl;
+  }
+
   async getMatches() {
-    console.log(`🚀 Avvio ricerca partite di oggi con ${this.sources.length} API ufficiali`);
+    // Controlla cache
+    if (this.isCacheValid()) {
+      console.log('📦 Utilizzo cache (età: ' + Math.round((Date.now() - this.cache.timestamp) / 1000) + 's)');
+      return this.cache.data;
+    }
+    
+    console.log(`🚀 Avvio ricerca partite con API ufficiale livescore-api.com`);
+    console.log(`🔑 API Key: ${this.apiKey.substring(0, 4)}...${this.apiKey.substring(12)}`);
     
     const allMatches = [];
     const successfulSources = [];
@@ -444,42 +265,37 @@ class FootballScraperToday {
     for (const source of sortedSources) {
       sourcesAttempted++;
       try {
-        console.log(`🌐 [${sourcesAttempted}/${this.sources.length}] Tentativo ${source.name}: ${source.url}`);
+        console.log(`🌐 [${sourcesAttempted}/${this.sources.length}] ${source.name}`);
+        console.log(`   URL: ${source.url}`);
         
         await this.randomDelay();
         
         const config = {
-          headers: { ...this.getHeaders(), ...source.headers },
+          headers: this.getHeaders(),
           timeout: 15000,
-          maxRedirects: 3
+          maxRedirects: 3,
+          params: source.params
         };
-
-        // Aggiungi parametri se presenti
-        if (source.params) {
-          config.params = source.params;
-        }
 
         const response = await axios.get(source.url, config);
         
         if (response.status === 200 && response.data) {
           console.log(`✅ Risposta ricevuta da ${source.name}`);
           
-          const matches = this.parseResponse(response.data, source.name);
+          // Verifica se l'API ha restituito un errore
+          if (response.data.success === false) {
+            console.log(`❌ API Error: ${response.data.error || 'Unknown error'}`);
+            continue;
+          }
+          
+          const matches = this.parseLiveScoreAPI(response.data, source.name);
           const validMatches = matches.filter(match => this.isValidMatch(match));
           
           if (validMatches.length > 0) {
             console.log(`🎯 ${source.name}: ${validMatches.length} partite valide trovate`);
             
-            // Aggiungi fonte alle partite
-            validMatches.forEach(match => {
-              match.source = source.name;
-            });
-            
             allMatches.push(...validMatches);
             successfulSources.push(source.name);
-            
-            // Continua sempre la ricerca per ottenere tutte le partite disponibili
-            console.log(`🚀 Trovate ${allMatches.length} partite totali finora, continuo la ricerca...`);
           } else {
             console.log(`⚠️ ${source.name}: Nessuna partita valida trovata`);
           }
@@ -490,6 +306,9 @@ class FootballScraperToday {
         console.log(`❌ Errore ${source.name}: ${error.message}`);
         if (error.response) {
           console.log(`📊 Status: ${error.response.status}`);
+          if (error.response.data) {
+            console.log(`📄 Response:`, JSON.stringify(error.response.data, null, 2));
+          }
         }
       }
     }
@@ -499,7 +318,8 @@ class FootballScraperToday {
     const seen = new Set();
     
     for (const match of allMatches) {
-      const key = `${match.home.toLowerCase()}-${match.away.toLowerCase()}`;
+      // Usa l'ID ufficiale se disponibile, altrimenti crea una chiave
+      const key = match.id || `${match.home.toLowerCase()}-${match.away.toLowerCase()}-${match.date}`;
       if (!seen.has(key)) {
         seen.add(key);
         uniqueMatches.push(match);
@@ -507,15 +327,14 @@ class FootballScraperToday {
     }
     
     if (uniqueMatches.length > 0) {
-      console.log(`🎉 TOTALE: ${uniqueMatches.length} partite uniche trovate da ${successfulSources.length} fonti!`);
-      console.log(`📊 Fonti di successo: ${successfulSources.join(', ')}`);
+      console.log(`🎉 TOTALE: ${uniqueMatches.length} partite uniche trovate!`);
+      console.log(`📊 Endpoint di successo: ${successfulSources.join(', ')}`);
       
       // Trasforma i dati nel formato atteso dal proxy
-      const transformedMatches = uniqueMatches.map((match, index) => {
+      const transformedMatches = uniqueMatches.map((match) => {
         // Combina date e time per creare il timestamp ISO completo
         let startTimestamp;
         if (match.date && match.time) {
-          // Formato: "2025-10-13" + "15:30" -> "2025-10-13T15:30:00.000Z"
           startTimestamp = new Date(`${match.date}T${match.time}:00`).toISOString();
         } else if (match.date) {
           startTimestamp = new Date(`${match.date}T00:00:00`).toISOString();
@@ -523,55 +342,65 @@ class FootballScraperToday {
           startTimestamp = new Date().toISOString();
         }
         
-        // Genera un ID univoco basato su squadre e data
-        const matchId = Math.abs(
+        // Genera un ID univoco se non presente
+        const matchId = match.id || Math.abs(
           `${match.home}-${match.away}-${match.date}`.split('').reduce((hash, char) => {
             return ((hash << 5) - hash) + char.charCodeAt(0);
           }, 0)
         );
         
         return {
-          id: matchId,                                 // ID univoco per la partita
+          id: matchId,
           home: match.home,
           away: match.away,
-          goalsHome: parseInt(match.homeScore) || 0,  // Converti homeScore -> goalsHome
-          goalsAway: parseInt(match.awayScore) || 0,  // Converti awayScore -> goalsAway
-          start: startTimestamp,                       // Aggiungi campo start (timestamp ISO)
+          goalsHome: parseInt(match.homeScore) || 0,
+          goalsAway: parseInt(match.awayScore) || 0,
+          start: startTimestamp,
+          time: match.time, // Ora della partita (HH:MM)
+          date: match.date, // Data della partita (YYYY-MM-DD)
           elapsed: match.elapsed || null,
           status: match.status,
           league: match.league,
-          country: match.country || this.getCountryFromLeague(match.league)
+          country: match.country || this.getCountryFromLeague(match.league),
+          location: match.location || '', // Stadio
+          source: match.source
         };
       });
       
       console.log(`✅ Trasformate ${transformedMatches.length} partite nel formato corretto`);
       if (transformedMatches.length > 0) {
-        console.log(`🔍 Esempio partita trasformata: ID=${transformedMatches[0].id}, ${transformedMatches[0].home} vs ${transformedMatches[0].away}, start: ${transformedMatches[0].start}, country: ${transformedMatches[0].country}`);
+        console.log(`🔍 Esempio: ${transformedMatches[0].home} vs ${transformedMatches[0].away} (${transformedMatches[0].league})`);
       }
       
-      return {
+      const result = {
         success: true,
-        matches: transformedMatches, // TUTTE LE PARTITE nel formato corretto
-        source: `multi-source: ${successfulSources.join(', ')}`,
+        matches: transformedMatches,
+        source: `LiveScore API Official: ${successfulSources.join(', ')}`,
         sources_successful: successfulSources.length,
         sources_total: this.sources.length,
         timestamp: new Date().toISOString(),
         date: new Date().toISOString().split('T')[0],
         total_matches: transformedMatches.length
       };
+      
+      // Salva in cache
+      this.cache.data = result;
+      this.cache.timestamp = Date.now();
+      
+      return result;
     }
     
-    // NESSUN FALLBACK - Solo errore onesto
-    console.log(`❌ Impossibile recuperare partite da tutte le ${this.sources.length} fonti API`);
-    return {
+    // Nessuna partita trovata
+    console.log(`❌ Nessuna partita trovata da tutti gli endpoint`);
+    const errorResult = {
       success: false,
-      error: 'Nessuna partita di oggi trovata dalle API',
-      message: `Provate tutte le ${this.sources.length} fonti API disponibili. Nessun dato finto generato.`,
+      error: 'Nessuna partita trovata',
+      message: `Provati ${this.sources.length} endpoint LiveScore API ufficiali. Nessun dato disponibile.`,
       sources_tried: this.sources.map(s => s.name),
-      sources_attempted: sourcesAttempted,
-      timestamp: new Date().toISOString(),
-      date: new Date().toISOString().split('T')[0]
+      timestamp: new Date().toISOString()
     };
+    
+    return errorResult;
   }
 }
 
