@@ -6,24 +6,24 @@ void main() async {
   print('🔬 TEST COMPLETO DELLE FUNZIONALITÀ');
   print('=' * 80);
   
-  await testProblem1_Pagination();
-  await testProblem2_LiveDetection();
-  await testProblem3_FollowedMatches();
-  await testProblem4_ScoreUpdates();
+  await testProblem1Pagination();
+  await testProblem2LiveDetection();
+  await testProblem3FollowedMatches();
+  await testProblem4ScoreUpdates();
   await testTelegramNotifications();
   
-  print('\n' + '=' * 80);
+  print('\n${'=' * 80}');
   print('✅ TUTTI I TEST COMPLETATI');
   print('=' * 80);
 }
 
 // TEST 1: Paginazione e Partite Internazionali
-Future<void> testProblem1_Pagination() async {
+Future<void> testProblem1Pagination() async {
   print('\n📋 TEST 1: PAGINAZIONE E PARTITE INTERNAZIONALI');
   print('-' * 80);
   
   try {
-    final apiKey = 'Wvt7qFZBxZmsh5Aq0Ry0Ks8Aq5Ixp1Ql8Ndjsn5Ql8Ndjsn5Ql8Ndjsn5Ql8Nd';
+    const apiKey = 'Wvt7qFZBxZmsh5Aq0Ry0Ks8Aq5Ixp1Ql8Ndjsn5Ql8Ndjsn5Ql8Ndjsn5Ql8Nd';
     final allMatches = <Map<String, dynamic>>[];
     final seenIds = <String>{};
     
@@ -58,7 +58,7 @@ Future<void> testProblem1_Pagination() async {
         }
       }
       
-      await Future.delayed(Duration(milliseconds: 500));
+      await Future.delayed(const Duration(milliseconds: 500));
     }
     
     // Analisi risultati
@@ -111,12 +111,12 @@ Future<void> testProblem1_Pagination() async {
 }
 
 // TEST 2: Rilevamento Partite Live
-Future<void> testProblem2_LiveDetection() async {
+Future<void> testProblem2LiveDetection() async {
   print('\n\n🔴 TEST 2: RILEVAMENTO PARTITE LIVE');
   print('-' * 80);
   
   try {
-    final apiKey = 'Wvt7qFZBxZmsh5Aq0Ry0Ks8Aq5Ixp1Ql8Ndjsn5Ql8Ndjsn5Ql8Ndjsn5Ql8Nd';
+    const apiKey = 'Wvt7qFZBxZmsh5Aq0Ry0Ks8Aq5Ixp1Ql8Ndjsn5Ql8Ndjsn5Ql8Ndjsn5Ql8Nd';
     final url = Uri.parse(
       'https://livescore-api.com/api-client/matches/live.json?key=$apiKey&secret=Wvt7qFZBxZmsh5Aq0Ry0Ks8Aq5Ixp1Ql8Ndjsn5Ql8Ndjsn5Ql8Ndjsn5Ql8Nd'
     );
@@ -190,7 +190,7 @@ Future<void> testProblem2_LiveDetection() async {
 }
 
 // TEST 3: Partite Seguite
-Future<void> testProblem3_FollowedMatches() async {
+Future<void> testProblem3FollowedMatches() async {
   print('\n\n📌 TEST 3: GESTIONE PARTITE SEGUITE');
   print('-' * 80);
   
@@ -198,7 +198,7 @@ Future<void> testProblem3_FollowedMatches() async {
     print('  🔍 Simulazione flusso partite seguite...');
     
     // Simula recupero partite
-    final apiKey = 'Wvt7qFZBxZmsh5Aq0Ry0Ks8Aq5Ixp1Ql8Ndjsn5Ql8Ndjsn5Ql8Ndjsn5Ql8Nd';
+    const apiKey = 'Wvt7qFZBxZmsh5Aq0Ry0Ks8Aq5Ixp1Ql8Ndjsn5Ql8Ndjsn5Ql8Ndjsn5Ql8Nd';
     final url = Uri.parse(
       'https://livescore-api.com/api-client/fixtures/list.json?key=$apiKey&secret=Wvt7qFZBxZmsh5Aq0Ry0Ks8Aq5Ixp1Ql8Ndjsn5Ql8Ndjsn5Ql8Ndjsn5Ql8Nd&page=1'
     );
@@ -272,14 +272,14 @@ Future<void> testProblem3_FollowedMatches() async {
 }
 
 // TEST 4: Aggiornamento Punteggi
-Future<void> testProblem4_ScoreUpdates() async {
+Future<void> testProblem4ScoreUpdates() async {
   print('\n\n🔄 TEST 4: AGGIORNAMENTO PUNTEGGI');
   print('-' * 80);
   
   try {
     print('  🔍 Simulazione aggiornamento automatico...');
     
-    final apiKey = 'Wvt7qFZBxZmsh5Aq0Ry0Ks8Aq5Ixp1Ql8Ndjsn5Ql8Ndjsn5Ql8Ndjsn5Ql8Nd';
+    const apiKey = 'Wvt7qFZBxZmsh5Aq0Ry0Ks8Aq5Ixp1Ql8Ndjsn5Ql8Ndjsn5Ql8Ndjsn5Ql8Nd';
     
     // Primo recupero (stato iniziale)
     print('\n  📥 Recupero 1 (stato iniziale)...');
@@ -307,7 +307,7 @@ Future<void> testProblem4_ScoreUpdates() async {
     
     // Attendi 3 secondi
     print('\n  ⏳ Attesa 3 secondi...');
-    await Future.delayed(Duration(seconds: 3));
+    await Future.delayed(const Duration(seconds: 3));
     
     // Secondo recupero (stato aggiornato)
     print('\n  📥 Recupero 2 (stato aggiornato)...');
@@ -364,7 +364,7 @@ Future<void> testTelegramNotifications() async {
     final proxyUrl = Uri.parse('http://localhost:3001/api/test');
     
     try {
-      final response = await http.get(proxyUrl).timeout(Duration(seconds: 5));
+      final response = await http.get(proxyUrl).timeout(const Duration(seconds: 5));
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
