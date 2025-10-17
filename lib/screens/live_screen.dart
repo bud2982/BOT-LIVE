@@ -52,12 +52,30 @@ class _LiveScreenState extends State<LiveScreen> {
       // Usa getLiveMatches() invece di getFixturesToday() per ottenere solo partite live
       final liveMatches = await _footballService.getLiveMatches();
       
+      print('🔍 LiveScreen: Ricevute ${liveMatches.length} partite dal servizio');
+      
+      // DEBUG: Mostra le prime 3 partite con i loro dati
+      if (liveMatches.isNotEmpty) {
+        for (int i = 0; i < (liveMatches.length > 3 ? 3 : liveMatches.length); i++) {
+          final match = liveMatches[i];
+          print('  📊 Partita $i: ${match.home} vs ${match.away} - elapsed: ${match.elapsed}');
+        }
+      }
+      
       // Filtra solo le partite effettivamente in corso (esclude finite e non iniziate)
       final activeLiveMatches = liveMatches.where((match) {
-        // Partita è live se ha elapsed tra 1 e 89 (esclude 90+ che sono finite)
-        // oppure se elapsed è 45 (intervallo)
-        return match.elapsed != null && match.elapsed! > 0 && match.elapsed! < 90;
+        // Partita è live se ha elapsed > 0 (include anche 90+ per recupero/supplementari)
+        // Esclude solo partite non iniziate (elapsed == null o elapsed == 0)
+        final isLive = match.elapsed != null && match.elapsed! > 0;
+        
+        if (!isLive) {
+          print('  ❌ Filtrata: ${match.home} vs ${match.away} (elapsed: ${match.elapsed})');
+        }
+        
+        return isLive;
       }).toList();
+      
+      print('✅ LiveScreen: ${activeLiveMatches.length} partite live dopo filtro');
 
       // Ordina per paese e poi per minuti trascorsi
       activeLiveMatches.sort((a, b) {

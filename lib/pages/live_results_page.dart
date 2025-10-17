@@ -47,12 +47,9 @@ class _LiveResultsPageState extends State<LiveResultsPage> {
         _error = null;
       });
 
-      final allMatches = await _footballService.getFixturesToday();
-      
-      // Filtra solo le partite live (con elapsed non null e > 0)
-      final liveMatches = allMatches.where((match) {
-        return match.elapsed != null && match.elapsed! > 0;
-      }).toList();
+      // Mostra TUTTE le partite live, incluse quelle appena iniziate (elapsed = 0)
+      // Il servizio getLiveMatches() già filtra per partite effettivamente live
+      final liveMatches = await _footballService.getLiveMatches();
 
       // Ordina per minuti trascorsi (partite più avanzate prima)
       liveMatches.sort((a, b) {
@@ -105,8 +102,8 @@ class _LiveResultsPageState extends State<LiveResultsPage> {
   }
 
   String _getMatchStatus(Fixture fixture) {
-    if (fixture.elapsed == null) return 'Non iniziata';
-    if (fixture.elapsed! <= 0) return 'Non iniziata';
+    if (fixture.elapsed == null) return 'LIVE'; // Se è nella sezione live ma senza elapsed, è comunque live
+    if (fixture.elapsed! == 0) return 'LIVE'; // Appena iniziata
     if (fixture.elapsed! <= 45) return '${fixture.elapsed}\'';
     if (fixture.elapsed! <= 90) return '${fixture.elapsed}\'';
     if (fixture.elapsed! > 90) return '${fixture.elapsed}\' +';
@@ -114,10 +111,11 @@ class _LiveResultsPageState extends State<LiveResultsPage> {
   }
 
   Color _getStatusColor(Fixture fixture) {
-    if (fixture.elapsed == null || fixture.elapsed! <= 0) return Colors.grey;
-    if (fixture.elapsed! <= 45) return Colors.green;
-    if (fixture.elapsed! <= 90) return Colors.orange;
-    return Colors.red;
+    if (fixture.elapsed == null) return Colors.red; // Live senza elapsed = rosso (live)
+    if (fixture.elapsed! == 0) return Colors.green; // Appena iniziata = verde
+    if (fixture.elapsed! <= 45) return Colors.green; // Primo tempo = verde
+    if (fixture.elapsed! <= 90) return Colors.orange; // Secondo tempo = arancione
+    return Colors.red; // Oltre 90 minuti = rosso
   }
 
   @override

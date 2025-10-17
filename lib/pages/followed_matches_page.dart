@@ -23,6 +23,10 @@ class _FollowedMatchesPageState extends State<FollowedMatchesPage> {
   String? _error;
   Timer? _refreshTimer;
   DateTime? _lastUpdate;
+  
+  // Traccia le notifiche già inviate per evitare duplicati
+  // Formato: {matchId: {'0-0_8min': true, '1-0_halftime': true}}
+  final Map<int, Set<String>> _sentNotifications = {};
 
   @override
   void initState() {
@@ -133,6 +137,9 @@ class _FollowedMatchesPageState extends State<FollowedMatchesPage> {
           
           // Aggiorna anche in SharedPreferences per persistenza
           await _followedService.followMatch(mergedMatch);
+          
+          // 📱 INVIA NOTIFICHE TELEGRAM SE NECESSARIO
+          await _checkAndSendTelegramNotifications(followedMatch, updatedMatch);
         } else {
           print('ℹ️ Nessun cambiamento per: ${followedMatch.home} vs ${followedMatch.away}');
         }
@@ -217,6 +224,101 @@ class _FollowedMatchesPageState extends State<FollowedMatchesPage> {
           ),
         );
       }
+    }
+  }
+
+  /// Controlla le condizioni e invia notifiche Telegram automatiche
+  Future<void> _checkAndSendTelegramNotifications(Fixture oldMatch, Fixture newMatch) async {
+    try {
+      // Verifica se Telegram è configurato
+      final prefs = await SharedPreferences.getInstance();
+      final chatId = prefs.getString('telegram_chat_id');
+      
+      if (chatId == null || chatId.isEmpty) {
+        print('📱 Telegram non configurato, skip notifiche');
+        return;
+      }
+      
+      // Inizializza il set di notifiche per questa partita se non esiste
+      _sentNotifications.putIfAbsent(newMatch.id, () => {});
+      
+      final elapsed = newMatch.elapsed ?? 0;
+      final goalsHome = newMatch.goalsHome;
+      final goalsAway = newMatch.goalsAway;
+      
+      print('🔔 Controllo condizioni notifica Telegram per: ${newMatch.home} vs ${newMatch.away}');
+      print('   Punteggio: $goalsHome-$goalsAway, Minuto: $elapsed');
+      
+      // CONDIZIONE 1: Partita 0-0 dopo 8 minuti
+      if (goalsHome == 0 && goalsAway == 0 && elapsed >= 8) {
+        final notificationKey = '0-0_8min';
+        if (!_sentNotifications[newMatch.id]!.contains(notificationKey)) {
+          print('✅ CONDIZIONE 1 SODDISFATTA: 0-0 dopo 8 minuti');
+          
+          final message = '''
+⚽ ALERT SCOMMESSE - 0-0 dopo 8'
+
+${newMatch.home} 0 - 0 ${newMatch.away}
+🏆 ${newMatch.league}
+🌍 ${newMatch.country}
+⏱️ ${elapsed}' - Ancora 0-0!
+
+💡 Suggerimento: Over 2.5 goals
+''';
+          
+          final success = await _telegramService.sendNotification(
+            chatId: chatId,
+            message: message,
+            matchId: newMatch.id,
+          );
+          
+          if (success) {
+            _sentNotifications[newMatch.id]!.add(notificationKey);
+            print('📤 Notifica Telegram inviata: 0-0 dopo 8 minuti');
+          }
+        } else {
+          print('ℹ️ Notifica 0-0 dopo 8\' già inviata per questa partita');
+        }
+      }
+      
+      // CONDIZIONE 2: Risultato 1-0 o 0-1 a fine primo tempo (45' ± 5 minuti)
+      if ((goalsHome == 1 && goalsAway == 0) || (goalsHome == 0 && goalsAway == 1)) {
+        if (elapsed >= 40 && elapsed <= 50) {
+          final notificationKey = '1-0_or_0-1_halftime';
+          if (!_sentNotifications[newMatch.id]!.contains(notificationKey)) {
+            print('✅ CONDIZIONE 2 SODDISFATTA: 1-0 o 0-1 a fine primo tempo');
+            
+            final leadingTeam = goalsHome == 1 ? newMatch.home : newMatch.away;
+            final message = '''
+⚽ ALERT SCOMMESSE - Fine Primo Tempo
+
+${newMatch.home} $goalsHome - $goalsAway ${newMatch.away}
+🏆 ${newMatch.league}
+🌍 ${newMatch.country}
+⏱️ ${elapsed}' - $leadingTeam in vantaggio 1-0
+
+💡 Situazione interessante per il secondo tempo!
+''';
+            
+            final success = await _telegramService.sendNotification(
+              chatId: chatId,
+              message: message,
+              matchId: newMatch.id,
+            );
+            
+            if (success) {
+              _sentNotifications[newMatch.id]!.add(notificationKey);
+              print('📤 Notifica Telegram inviata: 1-0 o 0-1 a fine primo tempo');
+            }
+          } else {
+            print('ℹ️ Notifica 1-0/0-1 fine primo tempo già inviata per questa partita');
+          }
+        }
+      }
+      
+    } catch (e) {
+      print('⚠️ Errore durante l\'invio notifiche Telegram: $e');
+      // Non bloccare l'aggiornamento se le notifiche falliscono
     }
   }
 

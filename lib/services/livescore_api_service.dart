@@ -122,16 +122,29 @@ class LiveScoreApiService {
         final liveResponse = await http.get(liveUrl, headers: _headers)
             .timeout(const Duration(seconds: 30));
         
+        print('LiveScoreApiService: matches/live.json - Status: ${liveResponse.statusCode}');
+        
         if (liveResponse.statusCode == 200 && liveResponse.body.isNotEmpty) {
           final liveData = json.decode(liveResponse.body);
           final fixtures = _parseLiveScoreResponse(liveData, isLiveEndpoint: true);
           
-          // Filtra solo partite effettivamente live
-          liveFixtures = fixtures.where((f) {
-            return f.elapsed != null && f.elapsed! > 0;
-          }).toList();
+          print('LiveScoreApiService: matches/live.json - Parse completato: ${fixtures.length} partite totali');
           
-          print('LiveScoreApiService: matches/live.json - Trovate ${liveFixtures.length} partite live');
+          // DEBUG: Mostra le prime 3 partite
+          if (fixtures.isNotEmpty) {
+            for (int i = 0; i < (fixtures.length > 3 ? 3 : fixtures.length); i++) {
+              final f = fixtures[i];
+              print('  📊 Partita $i: ${f.home} vs ${f.away} - elapsed: ${f.elapsed}');
+            }
+          }
+          
+          // Mostra TUTTE le partite live, indipendentemente da elapsed
+          // Le partite live possono avere elapsed = 0 (appena iniziate) o null (senza info minuti)
+          liveFixtures = fixtures;
+          
+          print('LiveScoreApiService: matches/live.json - Trovate ${liveFixtures.length} partite live dopo filtro');
+        } else {
+          print('LiveScoreApiService: matches/live.json - Risposta vuota o errore (status: ${liveResponse.statusCode})');
         }
       } catch (e) {
         print('LiveScoreApiService: matches/live.json fallito: $e');
@@ -144,9 +157,12 @@ class LiveScoreApiService {
         try {
           final allFixtures = await getFixturesToday();
           
-          // Filtra solo partite con elapsed > 0 (in corso)
+          // Filtra partite che sono effettivamente live (status-based, non elapsed-based)
+          // Manteniamo tutte le partite che potrebbero essere live
           liveFixtures = allFixtures.where((f) {
-            return f.elapsed != null && f.elapsed! > 0;
+            // Una partita è live se ha elapsed >= 0 (incluso 0 per appena iniziate)
+            // o se non ha elapsed ma potrebbe essere live
+            return f.elapsed != null && f.elapsed! >= 0;
           }).toList();
           
           print('LiveScoreApiService: fixtures/list.json filtrate - Trovate ${liveFixtures.length} partite live');
@@ -170,41 +186,70 @@ class LiveScoreApiService {
     try {
       final List<Fixture> fixtures = [];
       
+      // DEBUG: Mostra la struttura della risposta
+      print('LiveScoreApiService: 🔍 Analisi struttura risposta API...');
+      print('LiveScoreApiService: success = ${data['success']}');
+      print('LiveScoreApiService: Chiavi root: ${data.keys.toList()}');
+      
       // LiveScore API formato ufficiale
       List<dynamic>? matches;
       
       if (data['success'] == true && data['data'] != null) {
         final dataSection = data['data'];
         
+        print('LiveScoreApiService: data è di tipo: ${dataSection.runtimeType}');
+        if (dataSection is Map) {
+          print('LiveScoreApiService: Chiavi in data: ${dataSection.keys.toList()}');
+        }
+        
         // IMPORTANTE: fixtures/list.json usa 'fixtures', matches/live.json usa 'match'
         if (isLiveEndpoint && dataSection['match'] != null && dataSection['match'] is List) {
           matches = dataSection['match'] as List<dynamic>;
-          print('LiveScoreApiService: Trovato array "match" (endpoint live)');
+          print('LiveScoreApiService: ✅ Trovato array "match" (endpoint live) - ${matches.length} elementi');
         } else if (!isLiveEndpoint && dataSection['fixtures'] != null && dataSection['fixtures'] is List) {
           matches = dataSection['fixtures'] as List<dynamic>;
-          print('LiveScoreApiService: Trovato array "fixtures" (endpoint fixtures)');
+          print('LiveScoreApiService: ✅ Trovato array "fixtures" (endpoint fixtures) - ${matches.length} elementi');
         } else if (dataSection['match'] != null && dataSection['match'] is List) {
           matches = dataSection['match'] as List<dynamic>;
+          print('LiveScoreApiService: ✅ Trovato array "match" - ${matches.length} elementi');
         } else if (dataSection['fixtures'] != null && dataSection['fixtures'] is List) {
           matches = dataSection['fixtures'] as List<dynamic>;
+          print('LiveScoreApiService: ✅ Trovato array "fixtures" - ${matches.length} elementi');
         } else if (dataSection['fixture'] != null && dataSection['fixture'] is List) {
           matches = dataSection['fixture'] as List<dynamic>;
+          print('LiveScoreApiService: ✅ Trovato array "fixture" - ${matches.length} elementi');
         }
       } else if (data['data'] != null && data['data'] is List) {
         matches = data['data'] as List<dynamic>;
+        print('LiveScoreApiService: ✅ data è direttamente un array - ${matches.length} elementi');
       } else if (data['matches'] != null && data['matches'] is List) {
         matches = data['matches'] as List<dynamic>;
+        print('LiveScoreApiService: ✅ Trovato array "matches" - ${matches.length} elementi');
       } else if (data is List) {
         matches = data as List<dynamic>;
+        print('LiveScoreApiService: ✅ Risposta è direttamente un array - ${matches.length} elementi');
       }
       
       if (matches == null) {
-        print('LiveScoreApiService: Formato risposta non riconosciuto');
+        print('LiveScoreApiService: ❌ Formato risposta non riconosciuto');
         print('LiveScoreApiService: Chiavi disponibili: ${data.keys.toList()}');
         if (data['data'] != null && data['data'] is Map) {
           print('LiveScoreApiService: Chiavi in data: ${(data['data'] as Map).keys.toList()}');
         }
         return [];
+      }
+      
+      // DEBUG: Mostra i dati grezzi della prima partita
+      if (matches.isNotEmpty) {
+        print('LiveScoreApiService: 🔍 Esempio prima partita (dati grezzi):');
+        final firstMatch = matches[0];
+        if (firstMatch is Map) {
+          print('  Chiavi: ${firstMatch.keys.toList()}');
+          print('  status: ${firstMatch['status']}');
+          print('  time: ${firstMatch['time']}');
+          print('  elapsed: ${firstMatch['elapsed']}');
+          print('  minute: ${firstMatch['minute']}');
+        }
       }
       
       for (final match in matches) {
