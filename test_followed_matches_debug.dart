@@ -52,13 +52,14 @@ void main() async {
     print('-' * 50);
     
     final currentFollowed = await followedService.getFollowedMatches();
+    List<Fixture> updatedMatches = [];
     if (currentFollowed.isNotEmpty) {
       final followedIds = currentFollowed.map((m) => m.id).toList();
       print('📋 IDs partite da aggiornare: $followedIds');
       
       // Test del metodo getLiveByIds
       print('\n🔍 Test getLiveByIds...');
-      final updatedMatches = await footballService.getLiveByIds(followedIds);
+      updatedMatches = await footballService.getLiveByIds(followedIds);
       print('✅ Partite aggiornate ricevute: ${updatedMatches.length}');
       
       if (updatedMatches.isEmpty) {
@@ -206,7 +207,7 @@ ${testMatch.home} 0 - 0 ${testMatch.away}
       }
     }
     
-    print('\n' + '=' * 80);
+    print('\n${'=' * 80}');
     print('🎯 RIEPILOGO DIAGNOSI:');
     print('   1. Partite seguite: ${currentFollowed.length}');
     print('   2. Aggiornamento live: ${updatedMatches.isNotEmpty ? "FUNZIONA" : "PROBLEMA"}');

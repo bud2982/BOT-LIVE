@@ -12,7 +12,7 @@ void main() {
   testFollowedMatchesPage();
   testFollowedMatchesUpdater();
   
-  print('\n' + '=' * 80);
+  print('\n${'=' * 80}');
   print('✅ VERIFICA COMPLETATA');
   print('=' * 80);
 }
