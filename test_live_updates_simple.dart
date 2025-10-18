@@ -72,7 +72,7 @@ void main() async {
     print('-' * 40);
     
     // Test con un chat ID di esempio (dovrai sostituirlo con quello reale)
-    final testChatId = "123456789"; // Sostituisci con il tuo chat ID reale
+    const testChatId = "123456789"; // Sostituisci con il tuo chat ID reale
     
     print('🧪 Test invio notifica Telegram...');
     print('   Chat ID di test: $testChatId');
@@ -152,7 +152,7 @@ ${match.home} 0 - 0 ${match.away}
       print('   (Questo è normale, dipende dalle partite live attuali)');
     }
     
-    print('\n' + '=' * 60);
+    print('\n${'=' * 60}');
     print('🎯 RIEPILOGO TEST:');
     print('   1. Partite live disponibili: ${liveMatches.length}');
     print('   2. getLiveByIds funziona: ${updatedMatches.isNotEmpty ? "SÌ" : "NO"}');
