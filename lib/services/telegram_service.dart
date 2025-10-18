@@ -50,58 +50,76 @@ class TelegramService {
     }
   }
   
-  /// Invia una notifica Telegram
+  /// Invia una notifica Telegram con retry automatico
   Future<bool> sendNotification({
     required String chatId,
     required String message,
     int? matchId,
+    int maxRetries = 3,
   }) async {
-    try {
-      print('📤 Invio notifica Telegram...');
-      print('   Chat ID: $chatId');
-      print('   Match ID: $matchId');
-      print('   Messaggio (primi 100 caratteri): ${message.substring(0, message.length > 100 ? 100 : message.length)}');
-      
-      final requestBody = {
-        'chatId': chatId,
-        'message': message,
-        if (matchId != null) 'matchId': matchId,
-      };
-      
-      print('   Body della richiesta: ${json.encode(requestBody)}');
-      
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/telegram/notify'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: json.encode(requestBody),
-      ).timeout(const Duration(seconds: 10));
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        print('📤 Invio notifica Telegram (tentativo $attempt/$maxRetries)...');
+        print('   Chat ID: $chatId');
+        print('   Match ID: $matchId');
+        print('   Messaggio (primi 100 caratteri): ${message.substring(0, message.length > 100 ? 100 : message.length)}');
+        
+        final requestBody = {
+          'chatId': chatId,
+          'message': message,
+          if (matchId != null) 'matchId': matchId,
+        };
+        
+        // Timeout progressivo: 15s, 20s, 30s
+        final timeoutDuration = Duration(seconds: 10 + (attempt * 5));
+        print('   Timeout: ${timeoutDuration.inSeconds}s');
+        
+        final response = await http.post(
+          Uri.parse('$baseUrl/api/telegram/notify'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'User-Agent': 'BOT-LIVE-App/1.0',
+          },
+          body: json.encode(requestBody),
+        ).timeout(timeoutDuration);
 
-      print('   Status code risposta: ${response.statusCode}');
-      print('   Body risposta: ${response.body}');
+        print('   Status code risposta: ${response.statusCode}');
+        print('   Body risposta: ${response.body}');
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['success'] == true) {
-          print('✅ Notifica inviata con successo');
-          return true;
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          if (data['success'] == true) {
+            print('✅ Notifica inviata con successo al tentativo $attempt');
+            return true;
+          } else {
+            print('❌ Risposta negativa dal server: ${data['error']}');
+            if (attempt == maxRetries) return false;
+          }
+        } else if (response.statusCode >= 500) {
+          // Errore server, riprova
+          print('⚠️ Errore server (${response.statusCode}), riprovo...');
+          if (attempt == maxRetries) return false;
         } else {
-          print('❌ Risposta negativa dal server: ${data['error']}');
+          // Errore client, non riprovare
+          print('❌ Errore client (${response.statusCode}): ${response.body}');
           return false;
         }
+        
+      } catch (e, stackTrace) {
+        print('💥 Errore TelegramService notify (tentativo $attempt): $e');
+        
+        if (attempt == maxRetries) {
+          print('❌ Tutti i tentativi falliti. Stack trace: $stackTrace');
+          return false;
+        } else {
+          print('⏳ Attendo prima del prossimo tentativo...');
+          await Future.delayed(Duration(seconds: attempt * 2)); // 2s, 4s, 6s
+        }
       }
-      
-      print('❌ Errore nell\'invio notifica: ${response.statusCode}');
-      print('   Dettagli: ${response.body}');
-      return false;
-      
-    } catch (e, stackTrace) {
-      print('💥 Errore TelegramService notify: $e');
-      print('   Stack trace: $stackTrace');
-      return false;
     }
+    
+    return false;
   }
   
   /// Crea un messaggio di notifica per l'inizio di una partita

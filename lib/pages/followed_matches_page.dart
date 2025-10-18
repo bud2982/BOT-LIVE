@@ -85,14 +85,60 @@ class _FollowedMatchesPageState extends State<FollowedMatchesPage> {
     try {
       print('🔄 Aggiornamento risultati live per ${_followedMatches.length} partite seguite...');
       
-      // Estrai gli ID delle partite seguite
-      final followedIds = _followedMatches.map((m) => m.id).toList();
-      print('📋 IDs partite seguite: $followedIds');
+      // Filtra le partite che potrebbero essere ancora live o recenti
+      final now = DateTime.now();
+      final activeMatches = _followedMatches.where((match) {
+        // Considera attive le partite iniziate nelle ultime 3 ore
+        final timeSinceStart = now.difference(match.start);
+        final isRecent = timeSinceStart.inHours <= 3;
+        
+        // O partite che non sono ancora finite (elapsed < 90 o null)
+        final isNotFinished = match.elapsed == null || match.elapsed! < 90;
+        
+        return isRecent || isNotFinished;
+      }).toList();
       
-      // USA getLiveByIds per recuperare solo le partite seguite (più efficiente)
-      final updatedMatches = await _footballService.getLiveByIds(followedIds);
+      print('📋 Partite attive da aggiornare: ${activeMatches.length}/${_followedMatches.length}');
       
-      print('📊 Ricevuti aggiornamenti per ${updatedMatches.length} partite');
+      if (activeMatches.isEmpty) {
+        print('ℹ️ Nessuna partita attiva da aggiornare (tutte finite o troppo vecchie)');
+        return;
+      }
+      
+      // Estrai gli ID delle partite attive
+      final activeIds = activeMatches.map((m) => m.id).toList();
+      print('📋 IDs partite attive: $activeIds');
+      
+      // STRATEGIA DOPPIA: Cerca prima nelle live, poi in tutte le partite di oggi
+      List<Fixture> updatedMatches = [];
+      
+      // TENTATIVO 1: Cerca nelle partite live (più veloce e aggiornato)
+      try {
+        final allLive = await _footballService.getLiveMatches();
+        final liveUpdates = allLive.where((live) => activeIds.contains(live.id)).toList();
+        updatedMatches.addAll(liveUpdates);
+        print('📊 Trovate ${liveUpdates.length} partite nelle live');
+      } catch (e) {
+        print('⚠️ Errore recupero partite live: $e');
+      }
+      
+      // TENTATIVO 2: Per le partite non trovate nelle live, cerca in tutte le partite di oggi
+      final foundIds = updatedMatches.map((m) => m.id).toSet();
+      final missingIds = activeIds.where((id) => !foundIds.contains(id)).toList();
+      
+      if (missingIds.isNotEmpty) {
+        try {
+          print('🔍 Cerco ${missingIds.length} partite mancanti in tutte le partite di oggi...');
+          final todayMatches = await _footballService.getFixturesToday();
+          final todayUpdates = todayMatches.where((today) => missingIds.contains(today.id)).toList();
+          updatedMatches.addAll(todayUpdates);
+          print('📊 Trovate ${todayUpdates.length} partite aggiuntive nelle partite di oggi');
+        } catch (e) {
+          print('⚠️ Errore recupero partite di oggi: $e');
+        }
+      }
+      
+      print('📊 TOTALE aggiornamenti ricevuti: ${updatedMatches.length}');
       
       // Crea una mappa per accesso rapido
       final Map<int, Fixture> updatedMatchesMap = {};
@@ -111,7 +157,13 @@ class _FollowedMatchesPageState extends State<FollowedMatchesPage> {
         final updatedMatch = updatedMatchesMap[followedMatch.id];
         
         if (updatedMatch == null) {
-          print('⚠️ Partita ${followedMatch.home} vs ${followedMatch.away} (ID: ${followedMatch.id}) non trovata negli aggiornamenti');
+          // Controlla se la partita è troppo vecchia per essere aggiornata
+          final timeSinceStart = now.difference(followedMatch.start);
+          if (timeSinceStart.inHours > 3) {
+            print('ℹ️ Partita ${followedMatch.home} vs ${followedMatch.away} troppo vecchia per aggiornamenti (${timeSinceStart.inHours}h fa)');
+          } else {
+            print('⚠️ Partita ${followedMatch.home} vs ${followedMatch.away} (ID: ${followedMatch.id}) non trovata negli aggiornamenti');
+          }
           continue;
         }
         
@@ -120,8 +172,9 @@ class _FollowedMatchesPageState extends State<FollowedMatchesPage> {
             updatedMatch.goalsAway != followedMatch.goalsAway ||
             updatedMatch.elapsed != followedMatch.elapsed) {
           
-          print('✅ Aggiornata: ${updatedMatch.home} ${updatedMatch.goalsHome}-${updatedMatch.goalsAway} ${updatedMatch.away} (${updatedMatch.elapsed ?? "N/A"}\')');
-          print('   Vecchio: ${followedMatch.goalsHome}-${followedMatch.goalsAway} (${followedMatch.elapsed ?? "N/A"}\')');
+          print('✅ AGGIORNAMENTO RILEVATO:');
+          print('   Vecchio: ${followedMatch.home} ${followedMatch.goalsHome}-${followedMatch.goalsAway} ${followedMatch.away} (${followedMatch.elapsed ?? "N/A"}\')');
+          print('   Nuovo:   ${updatedMatch.home} ${updatedMatch.goalsHome}-${updatedMatch.goalsAway} ${updatedMatch.away} (${updatedMatch.elapsed ?? "N/A"}\')');
           
           // Usa copyWith per preservare il campo 'start' originale
           // e aggiornare solo i campi che cambiano (punteggi e tempo)
@@ -150,6 +203,15 @@ class _FollowedMatchesPageState extends State<FollowedMatchesPage> {
           _lastUpdate = DateTime.now();
         });
         print('✅ Aggiornate $updatedCount partite con successo');
+        
+        // Mostra notifica di aggiornamento all'utente
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🔄 Aggiornate $updatedCount partite'),
+            duration: const Duration(seconds: 2),
+            backgroundColor: Colors.green,
+          ),
+        );
       } else {
         print('ℹ️ Nessun aggiornamento necessario per le partite seguite');
       }
