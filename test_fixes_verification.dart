@@ -66,7 +66,7 @@ void main() async {
     print('\n📱 TEST 2: TELEGRAM CON RETRY AUTOMATICO');
     print('-' * 50);
     
-    final testChatId = "123456789"; // Sostituisci con il tuo chat ID reale
+    const testChatId = "123456789"; // Sostituisci con il tuo chat ID reale
     
     print('🧪 Test notifica con retry automatico...');
     print('   Chat ID: $testChatId');
@@ -138,14 +138,14 @@ Se ricevi questo messaggio, le correzioni funzionano!
       
       String conditionMet = '';
       if (goalsHome == 0 && goalsAway == 0 && elapsed >= 8) {
-        conditionMet = 'CONDIZIONE 1: 0-0 dopo ${elapsed}\'';
+        conditionMet = 'CONDIZIONE 1: 0-0 dopo $elapsed\'';
       } else if (((goalsHome == 1 && goalsAway == 0) || (goalsHome == 0 && goalsAway == 1)) && 
                  elapsed >= 40 && elapsed <= 50) {
-        conditionMet = 'CONDIZIONE 2: ${goalsHome}-${goalsAway} al ${elapsed}\'';
+        conditionMet = 'CONDIZIONE 2: $goalsHome-$goalsAway al $elapsed\'';
       }
       
-      print('   🚨 ${match.home} ${goalsHome}-${goalsAway} ${match.away}');
-      print('      ${conditionMet}');
+      print('   🚨 ${match.home} $goalsHome-$goalsAway ${match.away}');
+      print('      $conditionMet');
       print('      Lega: ${match.league}');
     }
     
@@ -179,7 +179,7 @@ Questo è un test delle correzioni applicate.
       print('   Alert test: ${alertSuccess ? "✅ INVIATO" : "❌ FALLITO"}');
     }
     
-    print('\n' + '=' * 70);
+    print('\n${'=' * 70}');
     print('🎯 RIEPILOGO CORREZIONI:');
     print('   1. ✅ Strategia doppia aggiornamenti implementata');
     print('   2. ✅ Filtro partite attive (< 3h, elapsed < 90\')');

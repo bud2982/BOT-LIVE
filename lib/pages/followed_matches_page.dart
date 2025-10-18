@@ -313,7 +313,7 @@ class _FollowedMatchesPageState extends State<FollowedMatchesPage> {
       
       // CONDIZIONE 1: Partita 0-0 dopo 8 minuti
       if (goalsHome == 0 && goalsAway == 0 && elapsed >= 8) {
-        final notificationKey = '0-0_8min';
+        const notificationKey = '0-0_8min';
         if (!_sentNotifications[newMatch.id]!.contains(notificationKey)) {
           print('✅ CONDIZIONE 1 SODDISFATTA: 0-0 dopo 8 minuti');
           
@@ -323,7 +323,7 @@ class _FollowedMatchesPageState extends State<FollowedMatchesPage> {
 ${newMatch.home} 0 - 0 ${newMatch.away}
 🏆 ${newMatch.league}
 🌍 ${newMatch.country}
-⏱️ ${elapsed}' - Ancora 0-0!
+⏱️ $elapsed' - Ancora 0-0!
 
 💡 Suggerimento: Over 2.5 goals
 ''';
@@ -346,7 +346,7 @@ ${newMatch.home} 0 - 0 ${newMatch.away}
       // CONDIZIONE 2: Risultato 1-0 o 0-1 a fine primo tempo (45' ± 5 minuti)
       if ((goalsHome == 1 && goalsAway == 0) || (goalsHome == 0 && goalsAway == 1)) {
         if (elapsed >= 40 && elapsed <= 50) {
-          final notificationKey = '1-0_or_0-1_halftime';
+          const notificationKey = '1-0_or_0-1_halftime';
           if (!_sentNotifications[newMatch.id]!.contains(notificationKey)) {
             print('✅ CONDIZIONE 2 SODDISFATTA: 1-0 o 0-1 a fine primo tempo');
             
@@ -357,7 +357,7 @@ ${newMatch.home} 0 - 0 ${newMatch.away}
 ${newMatch.home} $goalsHome - $goalsAway ${newMatch.away}
 🏆 ${newMatch.league}
 🌍 ${newMatch.country}
-⏱️ ${elapsed}' - $leadingTeam in vantaggio 1-0
+⏱️ $elapsed' - $leadingTeam in vantaggio 1-0
 
 💡 Situazione interessante per il secondo tempo!
 ''';
