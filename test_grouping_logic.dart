@@ -1,7 +1,3 @@
-// Test script per verificare la logica di raggruppamento
-import 'dart:convert';
-import 'dart:io';
-
 class TestFixture {
   final int id;
   final String home;
@@ -26,7 +22,9 @@ String getCountryFromLeague(String league) {
       leagueLower.contains('serie b') || 
       leagueLower.contains('serie c') ||
       leagueLower.contains('coppa italia') ||
-      leagueLower.contains('supercoppa italiana')) return 'Italy';
+      leagueLower.contains('supercoppa italiana')) {
+    return 'Italy';
+  }
   
   // Leghe inglesi
   if (leagueLower.contains('premier league') || 
@@ -35,25 +33,33 @@ String getCountryFromLeague(String league) {
       leagueLower.contains('league two') ||
       leagueLower.contains('fa cup') ||
       leagueLower.contains('carabao cup') ||
-      leagueLower.contains('community shield')) return 'England';
+      leagueLower.contains('community shield')) {
+    return 'England';
+  }
   
   // Leghe spagnole
   if (leagueLower.contains('la liga') || 
       leagueLower.contains('segunda division') ||
       leagueLower.contains('copa del rey') ||
-      leagueLower.contains('supercopa de españa')) return 'Spain';
+      leagueLower.contains('supercopa de españa')) {
+    return 'Spain';
+  }
   
   // Leghe tedesche
   if (leagueLower.contains('bundesliga') || 
       leagueLower.contains('2. bundesliga') ||
       leagueLower.contains('dfb-pokal') ||
-      leagueLower.contains('dfl-supercup')) return 'Germany';
+      leagueLower.contains('dfl-supercup')) {
+    return 'Germany';
+  }
   
   // Leghe francesi
   if (leagueLower.contains('ligue 1') || 
       leagueLower.contains('ligue 2') ||
       leagueLower.contains('coupe de france') ||
-      leagueLower.contains('trophée des champions')) return 'France';
+      leagueLower.contains('trophée des champions')) {
+    return 'France';
+  }
   
   return 'Other';
 }

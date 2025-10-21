@@ -81,9 +81,7 @@ void main() async {
     
     final allLeagues = <String>{};
     for (final match in todayMatches) {
-      if (match.league != null && match.league!.isNotEmpty) {
-        allLeagues.add(match.league!);
-      }
+      allLeagues.add(match.league);
     }
     
     final sortedLeagues = allLeagues.toList()..sort();
@@ -121,7 +119,7 @@ void main() async {
     print('-' * 50);
     
     final now = DateTime.now();
-    final japanTime = now.toUtc().add(Duration(hours: 9)); // JST = UTC+9
+    final japanTime = now.toUtc().add(const Duration(hours: 9)); // JST = UTC+9
     
     print('⏰ Ora locale: ${now.toString()}');
     print('⏰ Ora in Giappone: ${japanTime.toString()}');
@@ -137,7 +135,7 @@ void main() async {
     }
     
     // Risultato finale
-    print('\n' + '=' * 80);
+    print('\n${'=' * 80}');
     print('📊 RIEPILOGO RICERCA PARTITE GIAPPONESI:');
     print('   - Partite live giapponesi: ${japaneseInLive.length}');
     print('   - Partite oggi giapponesi: ${japaneseToday.length}');

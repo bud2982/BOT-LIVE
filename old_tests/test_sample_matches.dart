@@ -1,16 +1,13 @@
 import 'dart:async';
-import 'package:live_bot/services/api_football_service.dart';
+import 'package:live_bot/services/hybrid_football_service.dart';
 import 'package:live_bot/services/local_notif_service.dart';
 import 'package:live_bot/controllers/monitor_controller.dart';
 
 void main() async {
   print('=== TEST PARTITE DI ESEMPIO ===');
   
-  // Usa la chiave API predefinita dell'app
-  const apiKey = '239a1e02def2d210a0829a958348c5f5';
-  
   print('Inizializzazione servizio API con dati di esempio...');
-  final apiService = ApiFootballService(apiKey, useSampleData: true);
+  final apiService = HybridFootballService(useSampleData: true);
   
   // Recupera le partite di esempio
   print('Recupero partite di esempio...');

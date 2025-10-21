@@ -81,24 +81,54 @@ class FollowedMatchesUpdater {
       
       // Aggiorna ogni partita seguita con i nuovi dati
       int updatedCount = 0;
-      for (final updatedMatch in updatedData) {
-        final oldMatch = followedMatches.firstWhere(
-          (m) => m.id == updatedMatch.id,
-          orElse: () => updatedMatch,
-        );
+      
+      // Crea mappa per matching rapido
+      final Map<int, Fixture> updatedDataMap = {};
+      for (final match in updatedData) {
+        updatedDataMap[match.id] = match;
+      }
+      
+      for (final followedMatch in followedMatches) {
+        // Cerca prima per ID diretto
+        Fixture? updatedMatch = updatedDataMap[followedMatch.id];
+        
+        // Se non trovata per ID, prova matching alternativo (fallback)
+        if (updatedMatch == null) {
+          print('FollowedMatchesUpdater: ID matching fallito per ${followedMatch.home} vs ${followedMatch.away}, provo matching alternativo...');
+          
+          // Fallback: Matching per squadre e data
+          final sameDay = updatedData.where((m) {
+            final sameDate = m.start.year == followedMatch.start.year &&
+                            m.start.month == followedMatch.start.month &&
+                            m.start.day == followedMatch.start.day;
+            final sameTeams = (m.home == followedMatch.home && m.away == followedMatch.away) ||
+                             (m.home == followedMatch.away && m.away == followedMatch.home);
+            return sameDate && sameTeams;
+          }).toList();
+          
+          if (sameDay.isNotEmpty) {
+            updatedMatch = sameDay.first;
+            print('FollowedMatchesUpdater: ✅ Matching alternativo riuscito');
+          }
+        }
+        
+        if (updatedMatch == null) {
+          print('FollowedMatchesUpdater: ⚠️ Nessun aggiornamento trovato per ${followedMatch.home} vs ${followedMatch.away} (ID: ${followedMatch.id})');
+          continue;
+        }
         
         // Controlla se ci sono cambiamenti
-        final hasChanges = oldMatch.goalsHome != updatedMatch.goalsHome ||
-                          oldMatch.goalsAway != updatedMatch.goalsAway ||
-                          oldMatch.elapsed != updatedMatch.elapsed;
+        final hasChanges = followedMatch.goalsHome != updatedMatch.goalsHome ||
+                          followedMatch.goalsAway != updatedMatch.goalsAway ||
+                          followedMatch.elapsed != updatedMatch.elapsed;
         
         if (hasChanges) {
           print('FollowedMatchesUpdater: Aggiornamento ${updatedMatch.home} vs ${updatedMatch.away}');
-          print('  Vecchio: ${oldMatch.goalsHome}-${oldMatch.goalsAway} (${oldMatch.elapsed ?? "N/A"}\')');
+          print('  Vecchio: ${followedMatch.goalsHome}-${followedMatch.goalsAway} (${followedMatch.elapsed ?? "N/A"}\')');
           print('  Nuovo: ${updatedMatch.goalsHome}-${updatedMatch.goalsAway} (${updatedMatch.elapsed ?? "N/A"}\')');
           
           // Usa copyWith per preservare il campo 'start' originale
-          final mergedMatch = oldMatch.copyWith(
+          final mergedMatch = followedMatch.copyWith(
             goalsHome: updatedMatch.goalsHome,
             goalsAway: updatedMatch.goalsAway,
             elapsed: updatedMatch.elapsed,

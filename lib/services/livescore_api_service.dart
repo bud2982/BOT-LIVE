@@ -513,8 +513,19 @@ class LiveScoreApiService {
         country = _getCountryFromLeague(league, competitionId);
       }
       
+      // Parse ID - Se non disponibile, genera uno stabile basato su squadre + orario
+      int fixtureId = int.tryParse(match['id']?.toString() ?? '') ?? 0;
+      
+      if (fixtureId == 0) {
+        // Fallback: genera un ID stabile basato su squadre e orario
+        // Questo garantisce che la stessa partita avrà sempre lo stesso ID
+        final stableKey = '$homeTeam-$awayTeam-${startTime.year}-${startTime.month}-${startTime.day}-${startTime.hour}:${startTime.minute}';
+        fixtureId = stableKey.hashCode.abs();
+        print('LiveScoreApiService: ⚠️ ID API non disponibile, generato ID stabile: $fixtureId (da $stableKey)');
+      }
+      
       return Fixture(
-        id: int.tryParse(match['id']?.toString() ?? '0') ?? DateTime.now().millisecondsSinceEpoch,
+        id: fixtureId,
         home: homeTeam,
         away: awayTeam,
         goalsHome: homeGoals,

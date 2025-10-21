@@ -153,8 +153,30 @@ class _FollowedMatchesPageState extends State<FollowedMatchesPage> {
       for (int i = 0; i < _followedMatches.length; i++) {
         final followedMatch = _followedMatches[i];
         
-        // Cerca la partita aggiornata
-        final updatedMatch = updatedMatchesMap[followedMatch.id];
+        // Cerca la partita aggiornata - Prima per ID diretto
+        Fixture? updatedMatch = updatedMatchesMap[followedMatch.id];
+        
+        // Se non trovata per ID, prova matching alternativo (fallback)
+        if (updatedMatch == null) {
+          print('🔍 ID matching fallito per ${followedMatch.home} vs ${followedMatch.away} (ID: ${followedMatch.id}), provo matching alternativo...');
+          
+          // Fallback 1: Matching per squadre (nome esatto e orario stesso giorno)
+          final sameDay = updatedMatches.where((m) {
+            final sameDate = m.start.year == followedMatch.start.year &&
+                            m.start.month == followedMatch.start.month &&
+                            m.start.day == followedMatch.start.day;
+            final sameTeams = (m.home == followedMatch.home && m.away == followedMatch.away) ||
+                             (m.home == followedMatch.away && m.away == followedMatch.home);
+            return sameDate && sameTeams;
+          }).toList();
+          
+          if (sameDay.isNotEmpty) {
+            updatedMatch = sameDay.first;
+            print('✅ Matching alternativo riuscito: trovata partita per squadre e data');
+          } else {
+            print('❌ Nessun matching alternativo disponibile');
+          }
+        }
         
         if (updatedMatch == null) {
           // Controlla se la partita è troppo vecchia per essere aggiornata

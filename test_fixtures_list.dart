@@ -161,7 +161,7 @@ void main() async {
         }
         
         // Analizza TUTTE le partite per statistiche complete
-        print('\n' + '=' * 80);
+        print('\n${'=' * 80}');
         print('📊 ANALISI COMPLETA DI TUTTE LE ${matches.length} PARTITE:\n');
         
         withCountry = 0;
@@ -216,7 +216,7 @@ void main() async {
           print('   ${entry.key}: ${entry.value} partite');
         }
         
-        print('\n' + '=' * 80);
+        print('\n${'=' * 80}');
         print('💡 CONCLUSIONE:');
         if (withCountry > matches.length * 0.8) {
           print('   ✅ Questo endpoint fornisce dati paese di BUONA qualità!');

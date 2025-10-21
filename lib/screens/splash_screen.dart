@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/local_notif_service.dart';
+import '../services/followed_matches_updater.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -16,6 +17,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   bool _isInitializing = true;
   String _statusMessage = 'Inizializzazione...';
   bool _hasError = false;
+  late FollowedMatchesUpdater _followedMatchesUpdater;
   
   @override
   void initState() {
@@ -41,6 +43,13 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   void dispose() {
     _controller.dispose();
+    // Ferma il servizio di aggiornamento quando l'app viene chiusa
+    try {
+      _followedMatchesUpdater.dispose();
+      print('✅ Servizio aggiornamento partite seguite fermato');
+    } catch (e) {
+      print('⚠️ Errore nel fermo del servizio aggiornamento: $e');
+    }
     super.dispose();
   }
 
@@ -71,6 +80,12 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       print('Configurazione per uso dati reali tramite scraping');
       await prefs.setBool('use_sample_data', false);
       print('Flag per dati di esempio impostato a false');
+      
+      // Inizializza il servizio di aggiornamento automatico delle partite seguite
+      print('Inizializzazione servizio aggiornamento partite seguite...');
+      _followedMatchesUpdater = FollowedMatchesUpdater();
+      _followedMatchesUpdater.startAutoUpdate(intervalSeconds: 30); // Aggiorna ogni 30 secondi
+      print('✅ Servizio aggiornamento partite seguite avviato (ogni 30 secondi)');
       
       // Breve ritardo per mostrare l'animazione
       _updateStatus('Avvio applicazione...');
