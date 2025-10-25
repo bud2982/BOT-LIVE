@@ -22,6 +22,13 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isMonitoring = false;
   bool _isLoading = true;
 
+  // Funzione di utilità per convertire orari UTC a UTC+2 (ora italiana)
+  String _formatItalianTime(DateTime utcDateTime) {
+    // Aggiungi 2 ore per convertire da UTC a UTC+2 (ora italiana legale)
+    final italianTime = utcDateTime.add(const Duration(hours: 2));
+    return italianTime.toString().substring(0, 16); // "yyyy-MM-dd HH:mm"
+  }
+
   @override
   void initState() {
     super.initState();
@@ -613,7 +620,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text('🏆 ${f.league}'),
-                                          Text('⏰ ${f.start.toString().substring(0, 16)}'),
+                                          Text('⏰ ${_formatItalianTime(f.start)}'),
                                           Text('🆔 ${f.id}', style: const TextStyle(fontSize: 12)),
                                         ],
                                       ),

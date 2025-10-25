@@ -181,11 +181,13 @@ Non perdertela! ⚽
   
   /// Formatta data e ora per i messaggi
   String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.day.toString().padLeft(2, '0')}/'
-           '${dateTime.month.toString().padLeft(2, '0')}/'
-           '${dateTime.year} '
-           '${dateTime.hour.toString().padLeft(2, '0')}:'
-           '${dateTime.minute.toString().padLeft(2, '0')}';
+    // Converte da UTC a UTC+2 (ora italiana)
+    final italianTime = dateTime.add(const Duration(hours: 2));
+    return '${italianTime.day.toString().padLeft(2, '0')}/'
+           '${italianTime.month.toString().padLeft(2, '0')}/'
+           '${italianTime.year} '
+           '${italianTime.hour.toString().padLeft(2, '0')}:'
+           '${italianTime.minute.toString().padLeft(2, '0')}';
   }
   
   /// Determina il risultato della partita

@@ -87,12 +87,12 @@ class Fixture {
         } else if (dateStr.contains('FT:00Z')) {
           cleanDateStr = dateStr.replaceAll('FT:00Z', '15:00:00Z');
         }
-        // Parse come UTC e converti in ora locale
-        final utcDateTime = DateTime.parse(cleanDateStr);
-        start = utcDateTime.toLocal();
-        print('🔍 DEBUG Fixture - Parsed DateTime UTC: $utcDateTime');
-        print('🔍 DEBUG Fixture - Converted to Local: $start');
-        print('🔍 DEBUG Fixture - Local Hour: ${start.hour}, Minute: ${start.minute}');
+        // Parse direttamente - LiveScore fornisce già orari nel formato corretto
+        final parsedDateTime = DateTime.parse(cleanDateStr);
+        start = parsedDateTime;
+        print('🔍 DEBUG Fixture - Raw start string: "$dateStr"');
+        print('🔍 DEBUG Fixture - Parsed DateTime: $parsedDateTime');
+        print('🔍 DEBUG Fixture - Hour: ${start.hour}, Minute: ${start.minute}');
       } else {
         print('🔍 DEBUG Fixture - Empty start string, using DateTime.now()');
         start = DateTime.now();

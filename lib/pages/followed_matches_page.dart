@@ -92,14 +92,27 @@ class _FollowedMatchesPageState extends State<FollowedMatchesPage> {
       // Filtra le partite che potrebbero essere ancora live o recenti
       final now = DateTime.now();
       final activeMatches = _followedMatches.where((match) {
-        // Considera attive le partite iniziate nelle ultime 3 ore
+        // 🔧 Considera attive le partite iniziate nelle ultime 3 ore
+        // Gestisce anche timestamp negativi/anomali (nel passato o futuro)
         final timeSinceStart = now.difference(match.start);
-        final isRecent = timeSinceStart.inHours <= 3;
         
-        // O partite che non sono ancora finite (elapsed < 90 o null)
+        // Accetta partite se:
+        // 1. Iniziate nei RECENTI (dentro 3 ore), anche se timestamp è anomalo
+        final isWithinThreeHours = timeSinceStart.inMinutes.abs() <= 180;
+        
+        // 2. O partite non ancora finite (elapsed < 90)
         final isNotFinished = match.elapsed == null || match.elapsed! < 90;
         
-        return isRecent || isNotFinished;
+        // 3. O partite molto recenti indipendentemente dal tempo trascorso
+        final isVeryRecent = timeSinceStart.inMinutes.abs() <= 30;
+        
+        final isActive = isWithinThreeHours || isNotFinished || isVeryRecent;
+        
+        if (!isActive) {
+          print('  ⏭️ Saltata ${match.home} vs ${match.away}: timeSinceStart=${timeSinceStart.inMinutes}min, elapsed=${match.elapsed}');
+        }
+        
+        return isActive;
       }).toList();
       
       print('📋 Partite attive da aggiornare: ${activeMatches.length}/${_followedMatches.length}');
@@ -726,10 +739,12 @@ ${newMatch.home} $goalsHome - $goalsAway ${newMatch.away}
   }
 
   String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.day.toString().padLeft(2, '0')}/'
-           '${dateTime.month.toString().padLeft(2, '0')}/'
-           '${dateTime.year} '
-           '${dateTime.hour.toString().padLeft(2, '0')}:'
-           '${dateTime.minute.toString().padLeft(2, '0')}';
+    // Converte da UTC a UTC+2 (ora italiana)
+    final italianTime = dateTime.add(const Duration(hours: 2));
+    return '${italianTime.day.toString().padLeft(2, '0')}/'
+           '${italianTime.month.toString().padLeft(2, '0')}/'
+           '${italianTime.year} '
+           '${italianTime.hour.toString().padLeft(2, '0')}:'
+           '${italianTime.minute.toString().padLeft(2, '0')}';
   }
 }

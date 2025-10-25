@@ -360,6 +360,8 @@ class _LiveMatchesScreenState extends State<LiveMatchesScreen> with SingleTicker
   }
   
   String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+    // Converte da UTC a UTC+2 (ora italiana)
+    final italianTime = dateTime.add(const Duration(hours: 2));
+    return '${italianTime.day}/${italianTime.month}/${italianTime.year} ${italianTime.hour}:${italianTime.minute.toString().padLeft(2, '0')}';
   }
 }

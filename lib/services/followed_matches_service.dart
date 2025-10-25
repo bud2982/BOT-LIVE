@@ -95,20 +95,56 @@ class FollowedMatchesService {
       }
       
       final matchesJson = json.decode(matchesString) as List<dynamic>;
+      final now = DateTime.now();
+      bool needsSave = false;
       
-      return matchesJson.map((matchData) {
+      final matches = matchesJson.map((matchData) {
+        var startTime = DateTime.tryParse(matchData['start'] ?? '') ?? DateTime.now();
+        
+        // 🔧 CORREZIONE: Se il timestamp è nel futuro di più di 2 ore, è probabile sia sbagliato (+1 ora)
+        // Correggi il timestamp sottraendo 1 ora
+        final timeDiff = startTime.difference(now);
+        if (timeDiff.inHours > 2 && timeDiff.inHours < 25) {
+          print('🔧 CORREZIONE TIMESTAMP: ${matchData['home']} vs ${matchData['away']}');
+          print('   Prima: $startTime');
+          startTime = startTime.subtract(const Duration(hours: 1));
+          print('   Dopo: $startTime');
+          needsSave = true;
+        }
+        
         return Fixture(
           id: matchData['id'] ?? 0,
           home: matchData['home'] ?? 'Unknown',
           away: matchData['away'] ?? 'Unknown',
           goalsHome: matchData['goalsHome'] ?? 0,
           goalsAway: matchData['goalsAway'] ?? 0,
-          start: DateTime.tryParse(matchData['start'] ?? '') ?? DateTime.now(),
+          start: startTime,
           elapsed: matchData['elapsed'],
           league: matchData['league'] ?? 'Unknown League',
           country: matchData['country'] ?? 'Other',
         );
       }).toList();
+      
+      // Se sono state corrette partite, salva i timestamp corretti
+      if (needsSave) {
+        print('💾 Salvataggio timestamp corretti...');
+        final correctedJson = matches.map((m) => {
+          'id': m.id,
+          'home': m.home,
+          'away': m.away,
+          'goalsHome': m.goalsHome,
+          'goalsAway': m.goalsAway,
+          'start': m.start.toIso8601String(),
+          'elapsed': m.elapsed,
+          'league': m.league,
+          'country': m.country,
+        }).toList();
+        
+        await prefs.setString(_followedMatchesKey, json.encode(correctedJson));
+        print('✅ Timestamp corretti e salvati');
+      }
+      
+      return matches;
       
     } catch (e) {
       print('💥 Errore nel recuperare le partite seguite: $e');
@@ -131,12 +167,63 @@ class FollowedMatchesService {
   /// Pulisce le partite seguite terminate (più vecchie di 24 ore)
   Future<void> cleanupOldMatches() async {
     try {
-      final followedMatches = await getFollowedMatches();
-      final now = DateTime.now();
+      final prefs = await SharedPreferences.getInstance();
+      final matchesString = prefs.getString(_followedMatchesKey);
       
+      if (matchesString == null || matchesString.isEmpty) {
+        return;
+      }
+      
+      final matchesJson = json.decode(matchesString) as List<dynamic>;
+      final now = DateTime.now();
+      bool needsUpdate = false;
+      
+      // 🔧 PRIMA: Correggi timestamp sbagliati (+1 ora)
+      final correctedMatches = matchesJson.map((matchData) {
+        var startTime = DateTime.tryParse(matchData['start'] ?? '') ?? DateTime.now();
+        
+        // Se il timestamp è sensibilmente nel futuro, è probabilmente +1 ora sbagliato
+        final timeDiff = startTime.difference(now);
+        
+        // Logica: se è più di 2 ore nel futuro MA meno di 25 ore, correggi
+        if (timeDiff.inHours > 2 && timeDiff.inHours < 25) {
+          print('🔧🇮🇹 CORREZIONE ORARIO ITALIANO: ${matchData['home']} vs ${matchData['away']}');
+          print('   ❌ Prima: $startTime');
+          startTime = startTime.subtract(const Duration(hours: 1));
+          print('   ✅ Dopo (UTC+1): $startTime');
+          needsUpdate = true;
+          matchData['start'] = startTime.toIso8601String();
+        }
+        
+        return matchData;
+      }).toList();
+      
+      // Salva i timestamp corretti
+      if (needsUpdate) {
+        print('💾🇮🇹 Salvataggio timestamp corretti all\'orario italiano...');
+        await prefs.setString(_followedMatchesKey, json.encode(correctedMatches));
+        print('✅ Timestamp aggiornati all\'orario italiano (UTC+1)');
+      }
+      
+      // DOPO: Filtra le partite vecchie
+      final followedMatches = correctedMatches.map((matchData) {
+        return Fixture(
+          id: matchData['id'] ?? 0,
+          home: matchData['home'] ?? 'Unknown',
+          away: matchData['away'] ?? 'Unknown',
+          goalsHome: matchData['goalsHome'] ?? 0,
+          goalsAway: matchData['goalsAway'] ?? 0,
+          start: DateTime.tryParse(matchData['start'] ?? '') ?? DateTime.now(),
+          elapsed: matchData['elapsed'],
+          league: matchData['league'] ?? 'Unknown League',
+          country: matchData['country'] ?? 'Other',
+        );
+      }).toList();
+      
+      final now2 = DateTime.now();
       // Rimuovi partite più vecchie di 24 ore
       final activeMatches = followedMatches.where((match) {
-        final hoursSinceStart = now.difference(match.start).inHours;
+        final hoursSinceStart = now2.difference(match.start).inHours;
         return hoursSinceStart < 24; // Mantieni solo partite delle ultime 24 ore
       }).toList();
       
