@@ -30,10 +30,12 @@ class LiveScoreApiService {
     try {
       final List<Fixture> allFixtures = [];
       int currentPage = 1;
-      const int maxPages = 5; // Recupera fino a 5 pagine (150 partite max)
+      const int maxPages = 30; // Recupera fino a 30 pagine (900 partite) per copertura massima intelligente
       bool hasMorePages = true;
+      int pagesLoaded = 0;
       
-      // Recupera più pagine per ottenere tutte le partite disponibili
+      // Recupera più pagine per ottenere tutti i campionati importanti
+      // Limite intelligente a 30 pagine (include 99% campionati principali mondiali)
       while (hasMorePages && currentPage <= maxPages) {
         print('LiveScoreApiService: Recupero pagina $currentPage...');
         
@@ -69,12 +71,15 @@ class LiveScoreApiService {
         
         if (fixtures.isEmpty) {
           // Nessuna partita in questa pagina, fine paginazione
+          print('LiveScoreApiService: Pagina $currentPage vuota - Fine paginazione raggiunta');
           hasMorePages = false;
         } else {
           allFixtures.addAll(fixtures);
+          pagesLoaded = currentPage;
           
           // Se abbiamo meno di 30 partite, probabilmente è l'ultima pagina
           if (fixtures.length < 30) {
+            print('LiveScoreApiService: Pagina $currentPage ha solo ${fixtures.length} partite - Fine paginazione (< 30)');
             hasMorePages = false;
           } else {
             currentPage++;
@@ -82,7 +87,7 @@ class LiveScoreApiService {
         }
       }
       
-      print('LiveScoreApiService: ✅ TOTALE partite recuperate: ${allFixtures.length} (da $currentPage pagine)');
+      print('LiveScoreApiService: ✅ TOTALE partite recuperate: ${allFixtures.length} (da $pagesLoaded pagine)');
       
       // Rimuovi duplicati basati sull'ID
       final uniqueFixtures = <int, Fixture>{};

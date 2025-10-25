@@ -31,8 +31,10 @@ class _FollowedMatchesPageState extends State<FollowedMatchesPage> {
   @override
   void initState() {
     super.initState();
-    _loadFollowedMatches();
-    _startAutoRefresh();
+    _loadFollowedMatches().then((_) {
+      // Avvia il timer dopo il caricamento iniziale
+      _startAutoRefresh();
+    });
   }
 
   @override
@@ -43,8 +45,10 @@ class _FollowedMatchesPageState extends State<FollowedMatchesPage> {
 
   void _startAutoRefresh() {
     // Aggiorna ogni 30 secondi per i risultati live
+    print('🔄 AVVIO AGGIORNAMENTO AUTOMATICO OGNI 30 SECONDI');
     _refreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
-      if (mounted && _followedMatches.isNotEmpty) {
+      if (mounted) {
+        print('⏰ Timer tick: aggiornamento automatico partite seguite');
         _updateLiveScores();
       }
     });
