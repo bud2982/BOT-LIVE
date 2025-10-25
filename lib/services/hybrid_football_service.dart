@@ -1,115 +1,104 @@
 import 'livescore_api_service.dart';
-import 'test_proxy_service.dart';
 import '../models/fixture.dart';
 
+/// HybridFootballService - Ora utilizza SOLO LiveScore API
+/// 
+/// NOTA: Inizialmente questo servizio coordinava multiple fonti:
+/// - LiveScore API (primaria)
+/// - TestProxyService (fallback)
+/// - ApiFootballService (fallback secondario)
+/// - SofaScore Scraper (fallback terziario)
+/// 
+/// ATTUALMENTE: Disabilitati tutti i fallback per usare esclusivamente LiveScore.
+/// Se vuoi ripristinare altre fonti, vedi il git history.
 class HybridFootballService {
   final LiveScoreApiService _liveScoreApiService;
-  final TestProxyService _testProxyService;
   
   HybridFootballService({
     String? apiKey, // Manteniamo il parametro per retrocompatibilità ma lo ignoriamo
-    bool useSampleData = false, // Impostiamo a false per preferire dati reali
+    bool useSampleData = false, // Ignorato - usiamo SOLO LiveScore API
   }) : 
-    _liveScoreApiService = LiveScoreApiService(), // Usa SOLO LiveScore API ufficiali
-    _testProxyService = TestProxyService();
+    _liveScoreApiService = LiveScoreApiService();
   
   Future<List<Fixture>> getFixturesToday() async {
-    print('HybridFootballService: Usando LiveScore API diretta...');
+    print('🎯 HybridFootballService: Utilizzo SOLO LiveScore API');
     try {
-      // USA DIRETTAMENTE LIVESCORE API (il proxy restituisce solo 1 partita)
       final fixtures = await _liveScoreApiService.getFixturesToday();
-      print('HybridFootballService: Recuperate ${fixtures.length} partite da LiveScore API');
-      
-      // Se LiveScore API non restituisce abbastanza partite, prova il proxy come fallback
-      if (fixtures.length < 5) {
-        print('HybridFootballService: Poche partite da LiveScore API, provo il proxy...');
-        try {
-          final proxyFixtures = await _testProxyService.getFixturesToday();
-          if (proxyFixtures.length > fixtures.length) {
-            print('HybridFootballService: Proxy ha più partite (${proxyFixtures.length}), uso quelle');
-            return proxyFixtures;
-          }
-        } catch (proxyError) {
-          print('HybridFootballService: Proxy fallito: $proxyError');
-        }
-      }
-      
+      print('✅ HybridFootballService: Recuperate ${fixtures.length} partite da LiveScore');
       return fixtures;
     } catch (e) {
-      print('HybridFootballService: ERRORE LiveScore API in getFixturesToday: $e');
-      print('HybridFootballService: Fallback a proxy server...');
-      try {
-        final fixtures = await _testProxyService.getFixturesToday();
-        print('HybridFootballService: Recuperate ${fixtures.length} partite dal proxy server');
-        return fixtures;
-      } catch (e2) {
-        print('HybridFootballService: ERRORE anche con proxy server: $e2');
-        throw Exception('Errore sia LiveScore API che proxy: $e');
-      }
+      print('❌ HybridFootballService: ERRORE LiveScore API - $e');
+      // NESSUN FALLBACK - Solo LiveScore è configurato
+      throw Exception('❌ ERRORE: Non è possibile recuperare le partite da LiveScore. Verifica la configurazione API.');
     }
   }
   
   Future<List<Fixture>> getLiveMatches() async {
-    print('HybridFootballService: Recupero partite live SOLO da LiveScore API...');
+    print('🎯 HybridFootballService: Recupero partite live SOLO da LiveScore API');
     try {
       final fixtures = await _liveScoreApiService.getLiveMatches();
-      print('HybridFootballService: Recuperate ${fixtures.length} partite live da LiveScore API');
+      print('✅ HybridFootballService: Recuperate ${fixtures.length} partite live');
       return fixtures;
     } catch (e) {
-      print('HybridFootballService: ERRORE LiveScore API in getLiveMatches: $e');
-      // NON utilizzare fallback - solo LiveScore API
-      throw Exception('Errore LiveScore API: $e');
+      print('❌ HybridFootballService: ERRORE LiveScore API - $e');
+      throw Exception('❌ ERRORE: Non è possibile recuperare le partite live. Verifica la connessione e la configurazione API.');
     }
   }
 
   Future<List<Fixture>> getLiveByIds(List<int> fixtureIds) async {
-    print('HybridFootballService: Recupero partite per IDs specifici: $fixtureIds');
+    print('🎯 HybridFootballService: Recupero ${fixtureIds.length} partite per ID da LiveScore');
     try {
-      // STRATEGIA DOPPIA: Cerca sia nelle partite live che in tutte le partite di oggi
       final List<Fixture> matchingFixtures = [];
       
-      // TENTATIVO 1: Cerca nelle partite live
+      // Cerca prima nelle partite live
       try {
         final allLive = await _liveScoreApiService.getLiveMatches();
         final liveMatches = allLive.where((f) => fixtureIds.contains(f.id)).toList();
         matchingFixtures.addAll(liveMatches);
-        print('HybridFootballService: Trovate ${liveMatches.length} partite live per IDs specifici');
+        print('✅ Trovate ${liveMatches.length} partite live per gli ID richiesti');
       } catch (e) {
-        print('HybridFootballService: Errore recupero partite live: $e');
+        print('❌ Errore nel recupero delle partite live: $e');
       }
       
-      // TENTATIVO 2: Cerca nelle partite di oggi (per quelle non ancora live o appena finite)
-      try {
-        final allToday = await _liveScoreApiService.getFixturesToday();
-        final todayMatches = allToday.where((f) => fixtureIds.contains(f.id)).toList();
-        
-        // Aggiungi solo le partite che non sono già state trovate nelle live
-        for (final match in todayMatches) {
-          if (!matchingFixtures.any((m) => m.id == match.id)) {
-            matchingFixtures.add(match);
+      // Se non hai trovato tutte le partite, cerca nelle partite di oggi
+      if (matchingFixtures.length < fixtureIds.length) {
+        try {
+          final allToday = await _liveScoreApiService.getFixturesToday();
+          final todayMatches = allToday.where((f) => fixtureIds.contains(f.id)).toList();
+          
+          for (final match in todayMatches) {
+            if (!matchingFixtures.any((m) => m.id == match.id)) {
+              matchingFixtures.add(match);
+            }
           }
+          
+          print('✅ Trovate ${todayMatches.length} partite di oggi per gli ID richiesti');
+        } catch (e) {
+          print('❌ Errore nel recupero delle partite di oggi: $e');
         }
-        
-        print('HybridFootballService: Trovate ${todayMatches.length} partite di oggi per IDs specifici');
-      } catch (e) {
-        print('HybridFootballService: Errore recupero partite di oggi: $e');
       }
       
-      print('HybridFootballService: ✅ TOTALE partite trovate per IDs: ${matchingFixtures.length}');
+      print('✅ TOTALE: ${matchingFixtures.length}/${fixtureIds.length} partite trovate');
       return matchingFixtures;
       
     } catch (e) {
-      print('HybridFootballService: ERRORE durante getLiveByIds: $e');
-      throw Exception('Errore LiveScore API: $e');
+      print('❌ HybridFootballService: ERRORE durante getLiveByIds - $e');
+      throw Exception('❌ ERRORE: Non è possibile recuperare le partite. Verifica la connessione.');
     }
   }
 
   Future<bool> testConnection() async {
-    print('HybridFootballService: Test connessione SOLO a LiveScore API...');
+    print('🧪 HybridFootballService: Test connessione a LiveScore API');
     try {
-      return await _liveScoreApiService.testConnection();
+      final result = await _liveScoreApiService.testConnection();
+      if (result) {
+        print('✅ Connessione a LiveScore API: OK');
+      } else {
+        print('❌ Connessione a LiveScore API: FALLITA');
+      }
+      return result;
     } catch (e) {
-      print('HybridFootballService: Errore durante test connessione LiveScore API: $e');
+      print('❌ ERRORE test connessione: $e');
       return false;
     }
   }
