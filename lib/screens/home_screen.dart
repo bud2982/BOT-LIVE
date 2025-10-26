@@ -115,7 +115,7 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
       
-      // Per altri errori, mostra messaggio di errore
+      // Per altri errori, mostra messaggio di errore ma fornisce un fallback
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -126,8 +126,9 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       }
       
-      // Non utilizzare fallback - solo LiveScore API
-      rethrow;
+      // Fallback: fornisci una lista vuota invece di crashare
+      print('Utilizzo fallback - lista vuota');
+      _future = Future.value([]);
     }
   }
 
