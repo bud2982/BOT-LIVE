@@ -739,8 +739,8 @@ ${newMatch.home} $goalsHome - $goalsAway ${newMatch.away}
   }
 
   String _formatDateTime(DateTime dateTime) {
-    // Converte da UTC a UTC+2 (ora italiana)
-    final italianTime = dateTime.add(const Duration(hours: 2));
+    // Converte da UTC a UTC+1 (ora italiana)
+    final italianTime = dateTime.add(const Duration(hours: 1));
     return '${italianTime.day.toString().padLeft(2, '0')}/'
            '${italianTime.month.toString().padLeft(2, '0')}/'
            '${italianTime.year} '
