@@ -466,7 +466,9 @@ ${newMatch.home} $goalsHome - $goalsAway ${newMatch.away}
     } else if (difference.inMinutes < 60) {
       return '${difference.inMinutes}m fa';
     } else {
-      return '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+      // Converte da UTC a UTC+1 (ora italiana)
+      final italianTime = dateTime.add(const Duration(hours: 1));
+      return '${italianTime.hour.toString().padLeft(2, '0')}:${italianTime.minute.toString().padLeft(2, '0')}';
     }
   }
 
