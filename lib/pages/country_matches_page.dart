@@ -497,12 +497,11 @@ class _CountryMatchesPageState extends State<CountryMatchesPage> {
   }
 
   String _formatDateTime(DateTime dateTime) {
-    // Converte da UTC a UTC+1 (ora italiana)
-    final italianTime = dateTime.add(const Duration(hours: 1));
-    return '${italianTime.day.toString().padLeft(2, '0')}/'
-           '${italianTime.month.toString().padLeft(2, '0')}/'
-           '${italianTime.year} '
-           '${italianTime.hour.toString().padLeft(2, '0')}:'
-           '${italianTime.minute.toString().padLeft(2, '0')}';
+    // Timestamp già in UTC+1 (convertito al parsing)
+    return '${dateTime.day.toString().padLeft(2, '0')}/'
+           '${dateTime.month.toString().padLeft(2, '0')}/'
+           '${dateTime.year} '
+           '${dateTime.hour.toString().padLeft(2, '0')}:'
+           '${dateTime.minute.toString().padLeft(2, '0')}';
   }
 }

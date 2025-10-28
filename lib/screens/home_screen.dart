@@ -24,9 +24,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Funzione di utilità per convertire orari UTC a UTC+1 (ora italiana)
   String _formatItalianTime(DateTime utcDateTime) {
-    // Aggiungi 1 ora per convertire da UTC a UTC+1 (ora italiana)
-    final italianTime = utcDateTime.add(const Duration(hours: 1));
-    return italianTime.toString().substring(0, 16); // "yyyy-MM-dd HH:mm"
+    // Timestamp già in UTC+1 (convertito al parsing)
+    return utcDateTime.toString().substring(0, 16); // "yyyy-MM-dd HH:mm"
   }
 
   @override

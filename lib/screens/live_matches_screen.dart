@@ -360,8 +360,7 @@ class _LiveMatchesScreenState extends State<LiveMatchesScreen> with SingleTicker
   }
   
   String _formatDateTime(DateTime dateTime) {
-    // Converte da UTC a UTC+1 (ora italiana)
-    final italianTime = dateTime.add(const Duration(hours: 1));
-    return '${italianTime.day}/${italianTime.month}/${italianTime.year} ${italianTime.hour}:${italianTime.minute.toString().padLeft(2, '0')}';
+    // Timestamp già in UTC+1 (convertito al parsing)
+    return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 }

@@ -87,8 +87,12 @@ class Fixture {
         } else if (dateStr.contains('FT:00Z')) {
           cleanDateStr = dateStr.replaceAll('FT:00Z', '15:00:00Z');
         }
-        // Parse direttamente - LiveScore fornisce già orari nel formato corretto
-        final parsedDateTime = DateTime.parse(cleanDateStr);
+        // Parse direttamente - LiveScore fornisce orari in UTC (con Z)
+        var parsedDateTime = DateTime.parse(cleanDateStr);
+        // Se è in formato ISO con Z, è UTC - converti a UTC+1 italiano
+        if (dateStr.contains('Z')) {
+          parsedDateTime = parsedDateTime.add(const Duration(hours: 1));
+        }
         start = parsedDateTime;
         print('🔍 DEBUG Fixture - Raw start string: "$dateStr"');
         print('🔍 DEBUG Fixture - Parsed DateTime: $parsedDateTime');

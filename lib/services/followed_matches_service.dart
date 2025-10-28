@@ -4,6 +4,73 @@ import '../models/fixture.dart';
 
 class FollowedMatchesService {
   static const String _followedMatchesKey = 'followed_matches';
+  static const String _migrationVersionKey = 'followed_matches_migration_v2';
+  
+  /// Migrazione dei dati: corregge i timestamp salvati con il parsing locale sbagliato
+  /// (prima del fix del timezone)
+  Future<void> migrateOldData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Controlla se la migrazione è già stata eseguita
+      final migrated = prefs.getBool(_migrationVersionKey) ?? false;
+      if (migrated) {
+        print('✅ Migrazione timestamp già eseguita');
+        return;
+      }
+      
+      print('🔄 Inizio migrazione timestamp per partite seguite...');
+      
+      final matchesString = prefs.getString(_followedMatchesKey);
+      if (matchesString == null || matchesString.isEmpty) {
+        // Nessun dato da migrare
+        await prefs.setBool(_migrationVersionKey, true);
+        return;
+      }
+      
+      final matchesJson = json.decode(matchesString) as List<dynamic>;
+      final now = DateTime.now();
+      bool needsUpdate = false;
+      
+      final migratedMatches = matchesJson.map((matchData) {
+        var startTime = DateTime.tryParse(matchData['start'] ?? '') ?? DateTime.now();
+        
+        // Se il timestamp è nel passato recente (4-6 ore) e dovrebbe essere nel futuro
+        // significa che è stato salvato con parsing locale sbagliato
+        final timeDiff = startTime.difference(now);
+        
+        // Logica: se è tra -4 e +2 ore, probabilmente è sbagliato di 4 ore
+        // (era salvato come UTC ma interpretato come local timezone)
+        if (timeDiff.inHours >= -5 && timeDiff.inHours <= 2) {
+          // Verifica se l'orario sembra plausibile (non di notte)
+          if (startTime.hour >= 8 && startTime.hour <= 22) {
+            // Aggiungi 4 ore per correggerlo
+            print('🔧 Correzione timestamp: ${matchData['home']} vs ${matchData['away']}');
+            print('   ❌ Prima: $startTime');
+            startTime = startTime.add(const Duration(hours: 4));
+            print('   ✅ Dopo: $startTime');
+            matchData['start'] = startTime.toIso8601String();
+            needsUpdate = true;
+          }
+        }
+        
+        return matchData;
+      }).toList();
+      
+      if (needsUpdate) {
+        print('💾 Salvataggio timestamp migrati...');
+        await prefs.setString(_followedMatchesKey, json.encode(migratedMatches));
+        print('✅ Timestamp migrati e salvati');
+      }
+      
+      // Segna la migrazione come completata
+      await prefs.setBool(_migrationVersionKey, true);
+      print('✅ Migrazione completata');
+      
+    } catch (e) {
+      print('💥 Errore durante la migrazione: $e');
+    }
+  }
   
   /// Aggiunge una partita alla lista delle partite seguite
   Future<bool> followMatch(Fixture match) async {
@@ -95,22 +162,9 @@ class FollowedMatchesService {
       }
       
       final matchesJson = json.decode(matchesString) as List<dynamic>;
-      final now = DateTime.now();
-      bool needsSave = false;
       
       final matches = matchesJson.map((matchData) {
         var startTime = DateTime.tryParse(matchData['start'] ?? '') ?? DateTime.now();
-        
-        // 🔧 CORREZIONE: Se il timestamp è nel futuro di più di 2 ore, è probabile sia sbagliato (+1 ora)
-        // Correggi il timestamp sottraendo 1 ora
-        final timeDiff = startTime.difference(now);
-        if (timeDiff.inHours > 2 && timeDiff.inHours < 25) {
-          print('🔧 CORREZIONE TIMESTAMP: ${matchData['home']} vs ${matchData['away']}');
-          print('   Prima: $startTime');
-          startTime = startTime.subtract(const Duration(hours: 1));
-          print('   Dopo: $startTime');
-          needsSave = true;
-        }
         
         return Fixture(
           id: matchData['id'] ?? 0,
@@ -124,25 +178,6 @@ class FollowedMatchesService {
           country: matchData['country'] ?? 'Other',
         );
       }).toList();
-      
-      // Se sono state corrette partite, salva i timestamp corretti
-      if (needsSave) {
-        print('💾 Salvataggio timestamp corretti...');
-        final correctedJson = matches.map((m) => {
-          'id': m.id,
-          'home': m.home,
-          'away': m.away,
-          'goalsHome': m.goalsHome,
-          'goalsAway': m.goalsAway,
-          'start': m.start.toIso8601String(),
-          'elapsed': m.elapsed,
-          'league': m.league,
-          'country': m.country,
-        }).toList();
-        
-        await prefs.setString(_followedMatchesKey, json.encode(correctedJson));
-        print('✅ Timestamp corretti e salvati');
-      }
       
       return matches;
       
@@ -176,37 +211,9 @@ class FollowedMatchesService {
       
       final matchesJson = json.decode(matchesString) as List<dynamic>;
       final now = DateTime.now();
-      bool needsUpdate = false;
       
-      // 🔧 PRIMA: Correggi timestamp sbagliati (+1 ora)
-      final correctedMatches = matchesJson.map((matchData) {
-        var startTime = DateTime.tryParse(matchData['start'] ?? '') ?? DateTime.now();
-        
-        // Se il timestamp è sensibilmente nel futuro, è probabilmente +1 ora sbagliato
-        final timeDiff = startTime.difference(now);
-        
-        // Logica: se è più di 2 ore nel futuro MA meno di 25 ore, correggi
-        if (timeDiff.inHours > 2 && timeDiff.inHours < 25) {
-          print('🔧🇮🇹 CORREZIONE ORARIO ITALIANO: ${matchData['home']} vs ${matchData['away']}');
-          print('   ❌ Prima: $startTime');
-          startTime = startTime.subtract(const Duration(hours: 1));
-          print('   ✅ Dopo (UTC+1): $startTime');
-          needsUpdate = true;
-          matchData['start'] = startTime.toIso8601String();
-        }
-        
-        return matchData;
-      }).toList();
-      
-      // Salva i timestamp corretti
-      if (needsUpdate) {
-        print('💾🇮🇹 Salvataggio timestamp corretti all\'orario italiano...');
-        await prefs.setString(_followedMatchesKey, json.encode(correctedMatches));
-        print('✅ Timestamp aggiornati all\'orario italiano (UTC+1)');
-      }
-      
-      // DOPO: Filtra le partite vecchie
-      final followedMatches = correctedMatches.map((matchData) {
+      // Filtra le partite vecchie
+      final followedMatches = matchesJson.map((matchData) {
         return Fixture(
           id: matchData['id'] ?? 0,
           home: matchData['home'] ?? 'Unknown',
@@ -220,15 +227,13 @@ class FollowedMatchesService {
         );
       }).toList();
       
-      final now2 = DateTime.now();
       // Rimuovi partite più vecchie di 24 ore
       final activeMatches = followedMatches.where((match) {
-        final hoursSinceStart = now2.difference(match.start).inHours;
+        final hoursSinceStart = now.difference(match.start).inHours;
         return hoursSinceStart < 24; // Mantieni solo partite delle ultime 24 ore
       }).toList();
       
       if (activeMatches.length != followedMatches.length) {
-        final prefs = await SharedPreferences.getInstance();
         final matchesJson = activeMatches.map((m) => {
           'id': m.id,
           'home': m.home,

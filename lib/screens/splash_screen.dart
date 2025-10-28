@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/local_notif_service.dart';
 import '../services/followed_matches_updater.dart';
+import '../services/followed_matches_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -80,6 +81,11 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       print('Configurazione per uso dati reali tramite scraping');
       await prefs.setBool('use_sample_data', false);
       print('Flag per dati di esempio impostato a false');
+      
+      // Migra i vecchi timestamp salvati in locale
+      print('Esecuzione migrazione dati timestamp...');
+      final followedService = FollowedMatchesService();
+      await followedService.migrateOldData();
       
       // Inizializza il servizio di aggiornamento automatico delle partite seguite
       print('Inizializzazione servizio aggiornamento partite seguite...');

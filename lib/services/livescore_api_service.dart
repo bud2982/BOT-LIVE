@@ -339,7 +339,8 @@ class LiveScoreApiService {
         if (timeParts.length >= 2) {
           final hour = int.tryParse(timeParts[0]) ?? now.hour;
           final minute = int.tryParse(timeParts[1]) ?? now.minute;
-          startTime = DateTime(now.year, now.month, now.day, hour, minute);
+          // Crea come UTC, poi converti a UTC+1 italiano
+          startTime = DateTime.utc(now.year, now.month, now.day, hour, minute).add(const Duration(hours: 1));
         }
       }
       // Poi prova con 'scheduled' (formato "HH:MM")
@@ -350,7 +351,8 @@ class LiveScoreApiService {
         if (timeParts.length >= 2) {
           final hour = int.tryParse(timeParts[0]) ?? now.hour;
           final minute = int.tryParse(timeParts[1]) ?? now.minute;
-          startTime = DateTime(now.year, now.month, now.day, hour, minute);
+          // Crea come UTC, poi converti a UTC+1 italiano
+          startTime = DateTime.utc(now.year, now.month, now.day, hour, minute).add(const Duration(hours: 1));
         }
       } 
       // Poi prova con 'start_time' (formato ISO)
